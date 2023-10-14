@@ -1,0 +1,10 @@
+numpy
+numba
+linearwavetheory
+xarray
+scipy
+pandas
+tqdm
+numba_progress
+zarr
+s3fs
