@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewavespectrum",
-    version="0.0.1",
+    version="0.0.2",
     license="Apache 2 License",
     install_requires=[
         "numpy",
@@ -20,13 +20,7 @@ setuptools.setup(
         "full": [
             "qpsolvers",
             "cvxopt",
-            "zarr",
-            "s3fs",
-        ],
-        "zarr": [
-            "zarr",
-            "s3fs",
-        ],
+        ]
     },
     description="Python package that implements a spectral object for ocean surface gravity waves",
     long_description=readme_contents,
