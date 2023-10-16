@@ -4,5 +4,7 @@ from .spectrum import (
     WaveSpectrum,
     load_spectrum_from_netcdf,
     concatenate_spectra,
-    GroupedFrequencySpectrum
+    GroupedFrequencySpectrum,
 )
+
+from .spectrum import GroupedFrequencySpectrum as DrifterSpectrum

@@ -9,13 +9,7 @@ from roguewavespectrum.estimators.estimate import (
 from roguewavespectrum.time import to_datetime64
 from roguewavespectrum.physical_constants import PhysicsOptions
 from typing import TypeVar, Literal
-from xarray import (
-    Dataset,
-    DataArray,
-    zeros_like,
-    ones_like,
-    concat
-)
+from xarray import Dataset, DataArray, zeros_like, ones_like, concat
 from .spline_interpolation import cumulative_frequency_interpolation_1d_variable
 from .variable_names import (
     NAME_F,
@@ -36,8 +30,12 @@ _T = TypeVar("_T")
 
 
 class FrequencySpectrum(WaveSpectrum):
-    def __init__(self, dataset: Dataset, physics_options:PhysicsOptions=None,**kwargs):
-        super(FrequencySpectrum, self).__init__(dataset, physics_options=physics_options,**kwargs)
+    def __init__(
+        self, dataset: Dataset, physics_options: PhysicsOptions = None, **kwargs
+    ):
+        super(FrequencySpectrum, self).__init__(
+            dataset, physics_options=physics_options, **kwargs
+        )
         for name in [NAME_F, NAME_e]:
             if name not in dataset and name not in dataset.coords:
                 raise ValueError(
@@ -50,7 +48,7 @@ class FrequencySpectrum(WaveSpectrum):
         return self.dataset[NAME_e]
 
     @_spectrum.setter
-    def _spectrum(self,value):
+    def _spectrum(self, value):
         self.dataset[NAME_e] = value
 
     @property
@@ -63,11 +61,11 @@ class FrequencySpectrum(WaveSpectrum):
         return self._spectrum
 
     def interpolate_frequency(
-            self: "FrequencySpectrum",
-            new_frequencies,
-            extrapolation_value=0.0,
-            method: Literal["nearest", "linear", "spline"] = "linear",
-            **kwargs,
+        self: "FrequencySpectrum",
+        new_frequencies,
+        extrapolation_value=0.0,
+        method: Literal["nearest", "linear", "spline"] = "linear",
+        **kwargs,
     ) -> "FrequencySpectrum":
 
         if isinstance(new_frequencies, DataArray):
@@ -86,10 +84,12 @@ class FrequencySpectrum(WaveSpectrum):
             return self.interpolate(
                 {NAME_F: new_frequencies},
                 extrapolation_value=extrapolation_value,
-                method=method
+                method=method,
             )
 
-    def interpolate(self: _T, coordinates, extrapolation_value=0.0, method='linear',**kwargs) -> _T:
+    def interpolate(
+        self: _T, coordinates, extrapolation_value=0.0, method="linear", **kwargs
+    ) -> _T:
         """
         Interpolate the spectrum to the given coordinates. The coordinates should be a dictionary with the dimension
         name as key and the coordinate as value. Uses the xarray interp method. Extrapolation is done by filling the
@@ -108,8 +108,8 @@ class FrequencySpectrum(WaveSpectrum):
         _dataset = Dataset()
         _moments = [NAME_a1, NAME_b1, NAME_a2, NAME_b2]
 
-        if 'time' in coordinates:
-            coordinates['time'] = to_datetime64(coordinates['time'])
+        if "time" in coordinates:
+            coordinates["time"] = to_datetime64(coordinates["time"])
 
         for name in self.dataset:
             _name = str(name)
@@ -118,12 +118,10 @@ class FrequencySpectrum(WaveSpectrum):
             else:
                 _dataset = _dataset.assign({_name: self.dataset[_name]})
 
-        interpolated_data = _dataset.interp(
-            coords=coordinates, method=method
-        )
+        interpolated_data = _dataset.interp(coords=coordinates, method=method)
         for name in _moments:
             interpolated_data[name] = (
-                    interpolated_data[name] / interpolated_data[NAME_e]
+                interpolated_data[name] / interpolated_data[NAME_e]
             )
 
         object = FrequencySpectrum(interpolated_data)
@@ -177,7 +175,6 @@ class FrequencySpectrum(WaveSpectrum):
         :return: normalized Fourier moment sin(2*theta)
         """
         return self.dataset[NAME_b2]
-
 
     @property
     def e(self):
@@ -278,13 +275,13 @@ class FrequencySpectrum(WaveSpectrum):
         diff = numpy.diff(
             frequencies,
             append=2 * frequencies[-1] - frequencies[-2],
-            prepend=2 * frequencies[0] - frequencies[1]
+            prepend=2 * frequencies[0] - frequencies[1],
         )
         frequency_step = diff[0:-1] * 0.5 + diff[1:] * 0.5
 
         sampling_frequencies = numpy.concatenate(([0], numpy.cumsum(frequency_step)))
         sampling_frequencies = (
-                sampling_frequencies - frequency_step[0] / 2 + frequencies[0]
+            sampling_frequencies - frequency_step[0] / 2 + frequencies[0]
         )
 
         dims = self.dims
@@ -320,25 +317,25 @@ class FrequencySpectrum(WaveSpectrum):
         return FrequencySpectrum(Dataset(data_vars=data, coords=coords))
 
     def as_frequency_direction_spectrum(
-            self,
-            number_of_directions,
-            method: Estimators = "mem2",
-            solution_method="scipy",
+        self,
+        number_of_directions,
+        method: Estimators = "mem2",
+        solution_method="scipy",
     ) -> "FrequencyDirectionSpectrum":
 
         direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)
 
         output_array = (
-                estimate_directional_distribution(
-                    self.a1.values,
-                    self.b1.values,
-                    self.a2.values,
-                    self.b2.values,
-                    direction,
-                    method=method,
-                    solution_method=solution_method,
-                )
-                * self.e.values[..., None]
+            estimate_directional_distribution(
+                self.a1.values,
+                self.b1.values,
+                self.a2.values,
+                self.b2.values,
+                direction,
+                method=method,
+                solution_method=solution_method,
+            )
+            * self.e.values[..., None]
         )
 
         dims = self.dims_space_time + [NAME_F, NAME_D]
@@ -358,21 +355,23 @@ class GroupedFrequencySpectrum(FrequencySpectrum):
     def __init__(self, dataset: Dataset):
         super().__init__(dataset)
         self._current_iteration = 0
-        if 'group_id' not in dataset:
-            raise ValueError('GroupFrequencySpectrum requires group_id ')
+        if "group_id" not in dataset:
+            raise ValueError("GroupFrequencySpectrum requires group_id ")
 
-        if 'groups' not in dataset.coords:
-            groups = np.unique(dataset['group_id'])
+        if "groups" not in dataset.coords:
+            groups = np.unique(dataset["group_id"])
             self.dataset = self.dataset.assign_coords(groups=groups)
 
-    def __getitem__(self:"GroupedFrequencySpectrum", item:str) -> "GroupedFrequencySpectrum":
-        return self.isel( index = self.dataset['group_id'] == item )
+    def __getitem__(
+        self: "GroupedFrequencySpectrum", item: str
+    ) -> "GroupedFrequencySpectrum":
+        return self.isel(index=self.dataset["group_id"] == item)
 
-    def __contains__(self, item:str):
+    def __contains__(self, item: str):
         return item in self.keys()
 
     def __len__(self) -> int:
-        return len(self.dataset['groups'].values)
+        return len(self.dataset["groups"].values)
 
     def __iter__(self):
         self._current_iteration = 0
@@ -387,10 +386,16 @@ class GroupedFrequencySpectrum(FrequencySpectrum):
             raise StopIteration
 
     def keys(self):
-        return self.dataset['groups'].values
+        return self.dataset["groups"].values
+
+    @property
+    def trajectory_ids(self):
+        return self.keys()
 
     @classmethod
-    def from_trajectory_dataset(cls: "GroupedFrequencySpectrum", dataset: Dataset, mapping=None) -> "GroupedFrequencySpectrum":
+    def from_trajectory_dataset(
+        cls: "GroupedFrequencySpectrum", dataset: Dataset, mapping=None
+    ) -> "GroupedFrequencySpectrum":
         """
         Create a spectrum object from a xarray trajectory dataset.
 
@@ -401,20 +406,20 @@ class GroupedFrequencySpectrum(FrequencySpectrum):
         if mapping is not None:
             dataset = dataset.copy(deep=False).rename(mapping)
 
-        if 'trajectory' in dataset:
-            trajectory = dataset['trajectory'].values
-            rowsizes = dataset['rowsize'].values
+        if "trajectory" in dataset:
+            trajectory = dataset["trajectory"].values
+            rowsizes = dataset["rowsize"].values
             labels = []
             for ordinal_index, rowsize in enumerate(rowsizes):
                 labels += rowsize * [trajectory[ordinal_index]]
 
-            dataset = dataset.assign(
-                {'group_id': ('index', labels)}
-            )
-            dataset = dataset.drop_vars(['trajectory', 'rowsize'])
+            dataset = dataset.assign({"group_id": ("index", labels)})
+            dataset = dataset.drop_vars(["trajectory", "rowsize"])
 
         else:
-            raise ValueError('creating GroupedFrequencySpectrum from a trajectory dataset requires trajectory '
-                             'information')
+            raise ValueError(
+                "creating GroupedFrequencySpectrum from a trajectory dataset requires trajectory "
+                "information"
+            )
 
         return cls(dataset)

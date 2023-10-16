@@ -7,17 +7,15 @@ from linearwavetheory import (
     intrinsic_phase_speed,
 )
 from roguewavespectrum.time import to_datetime64
-from roguewavespectrum.physical_constants import PHYSICSOPTIONS, PhysicsOptions, _as_physicsoptions_lwt
+from roguewavespectrum.physical_constants import (
+    PHYSICSOPTIONS,
+    PhysicsOptions,
+    _as_physicsoptions_lwt,
+)
 from abc import ABC, abstractmethod
 
 from typing import TypeVar, List, Mapping
-from xarray import (
-    Dataset,
-    DataArray,
-    concat,
-    where,
-    open_dataset
-)
+from xarray import Dataset, DataArray, concat, where, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
 from .spline_interpolation import spline_peak_frequency
@@ -65,12 +63,17 @@ class WaveSpectrum(ABC):
       While workarounds exist - or we could state that inputs are assumed immutable - it is easier to simply not cache
       for now and put the onus on the user to properly reuse results if performance is of concern.
     """
+
     spectral_axis = NAME_F
 
-    def __init__(self, dataset: Dataset, physics_options: PhysicsOptions = None, **kwargs):
+    def __init__(
+        self, dataset: Dataset, physics_options: PhysicsOptions = None, **kwargs
+    ):
         # Check if at least frequency and variance density are present.
 
-        self.physics_options = physics_options if physics_options is not None else PHYSICSOPTIONS
+        self.physics_options = (
+            physics_options if physics_options is not None else PHYSICSOPTIONS
+        )
 
         # Make a shallow copy of the dataset to store as we will modify attributes / contents.
         self.dataset = dataset.copy(deep=False)
@@ -118,9 +121,7 @@ class WaveSpectrum(ABC):
     def sel(self: _T, *args, **kwargs) -> _T:
         dataset = Dataset()
         for var in self.dataset:
-            dataset = dataset.assign(
-                {var: self.dataset[var].sel(*args, **kwargs)}
-            )
+            dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
         return self.__class__(dataset=dataset)
 
     def isel(self: _T, *args, **kwargs) -> _T:
@@ -149,11 +150,15 @@ class WaveSpectrum(ABC):
         prepend = 2 * self.frequency[0] - self.frequency[1]
         append = 2 * self.frequency[-1] - self.frequency[-2]
         diff = np.diff(self.frequency, append=append, prepend=prepend)
-        return set_conventions(DataArray(
-            data=(diff[0:-1] * 0.5 + diff[1:] * 0.5),
-            dims=NAME_F,
-            coords={NAME_F: self.frequency},
-        ), 'frequency_bins', overwrite=True)
+        return set_conventions(
+            DataArray(
+                data=(diff[0:-1] * 0.5 + diff[1:] * 0.5),
+                dims=NAME_F,
+                coords={NAME_F: self.frequency},
+            ),
+            "frequency_bins",
+            overwrite=True,
+        )
 
     def fillna(self, value=0.0):
         """
@@ -224,9 +229,7 @@ class WaveSpectrum(ABC):
         new_spectral_shape = (length, *self.spectral_shape)
         new_dims = [flattened_coordinate] + self.dims_spectral
 
-        linear_index = DataArray(
-            data=np.arange(0, length), dims=flattened_coordinate
-        )
+        linear_index = DataArray(data=np.arange(0, length), dims=flattened_coordinate)
         indices = np.unravel_index(linear_index.values, shape)
 
         dataset = {}
@@ -287,7 +290,9 @@ class WaveSpectrum(ABC):
         number_of_spectral_dims = len(self.dims_spectral)
         return self.shape[:-number_of_spectral_dims]
 
-    def frequency_moment(self, power: int, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+    def frequency_moment(
+        self, power: int, fmin: float = 0.0, fmax: float = np.inf
+    ) -> DataArray:
         """
         Calculate a "spectral moment" over the given range. A spectral moment here refers to the integral:
 
@@ -298,8 +303,11 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: frequency moment
         """
-        return set_conventions(_integrate(
-            self.e * self.frequency ** power, NAME_F, fmin, fmax), 'MN', overwrite=True)
+        return set_conventions(
+            _integrate(self.e * self.frequency**power, NAME_F, fmin, fmax),
+            "MN",
+            overwrite=True,
+        )
 
     @property
     def number_of_frequencies(self) -> int:
@@ -501,7 +509,7 @@ class WaveSpectrum(ABC):
 
         :return: Fourier moment cos(theta)
         """
-        return set_conventions(self.a1 * self.e, 'A1', overwrite=True)
+        return set_conventions(self.a1 * self.e, "A1", overwrite=True)
 
     @property
     def B1(self) -> DataArray:
@@ -510,7 +518,7 @@ class WaveSpectrum(ABC):
 
         :return: Fourier moment sin(theta)
         """
-        return set_conventions(self.b1 * self.e, 'B1', overwrite=True)
+        return set_conventions(self.b1 * self.e, "B1", overwrite=True)
 
     @property
     def A2(self) -> DataArray:
@@ -519,7 +527,7 @@ class WaveSpectrum(ABC):
 
         :return: Fourier moment cos(2*theta)
         """
-        return set_conventions(self.a2 * self.e, 'A2', overwrite=True)
+        return set_conventions(self.a2 * self.e, "A2", overwrite=True)
 
     @property
     def B2(self) -> DataArray:
@@ -528,7 +536,7 @@ class WaveSpectrum(ABC):
 
         :return: Fourier moment sin(2*theta)
         """
-        return set_conventions(self.b2 * self.e, 'B2', overwrite=True)
+        return set_conventions(self.b2 * self.e, "B2", overwrite=True)
 
     @property
     def frequency(self) -> DataArray:
@@ -547,7 +555,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: variance (m^2)
         """
-        return set_conventions(self.frequency_moment(0, fmin, fmax), 'M0', overwrite=True)
+        return set_conventions(
+            self.frequency_moment(0, fmin, fmax), "M0", overwrite=True
+        )
 
     def m1(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -557,7 +567,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: first order frequency moment.
         """
-        return set_conventions(self.frequency_moment(1, fmin, fmax), 'M1', overwrite=True)
+        return set_conventions(
+            self.frequency_moment(1, fmin, fmax), "M1", overwrite=True
+        )
 
     def wave_speed(self) -> DataArray:
         """
@@ -569,9 +581,15 @@ class WaveSpectrum(ABC):
 
         wavenumber = self.wavenumber
         wavespeed = intrinsic_phase_speed(
-            wavenumber.values, self.depth.values, physics_options=_as_physicsoptions_lwt(self.physics_options))
-        return set_conventions(DataArray(wavespeed, dims=wavenumber.dims, coords=wavenumber.coords), 'C',
-                               overwrite=True)
+            wavenumber.values,
+            self.depth.values,
+            physics_options=_as_physicsoptions_lwt(self.physics_options),
+        )
+        return set_conventions(
+            DataArray(wavespeed, dims=wavenumber.dims, coords=wavenumber.coords),
+            "C",
+            overwrite=True,
+        )
 
     def wave_age(self, windspeed: typing.Union[Number, DataArray]) -> DataArray:
         """
@@ -580,7 +598,9 @@ class WaveSpectrum(ABC):
         :param windspeed: windspeed scale in m/s
         :return: wave age [-]
         """
-        return set_conventions(self.peak_wave_speed() / windspeed, 'wave_age', overwrite=True)
+        return set_conventions(
+            self.peak_wave_speed() / windspeed, "wave_age", overwrite=True
+        )
 
     def peak_wave_speed(self) -> DataArray:
         """
@@ -590,7 +610,10 @@ class WaveSpectrum(ABC):
         :return: peak wave speed (m/s)
         """
         return set_conventions(
-            2 * np.pi * self.peak_frequency() / self.peak_wavenumber, 'Cp', overwrite=True)
+            2 * np.pi * self.peak_frequency() / self.peak_wavenumber,
+            "Cp",
+            overwrite=True,
+        )
 
     @property
     def wavenumber_spectral_density(self) -> DataArray:
@@ -609,7 +632,9 @@ class WaveSpectrum(ABC):
         """
         wavenumber = self.wavenumber
         data_array = set_conventions(
-            self.e * self.groupspeed / (np.pi * 2), 'wavenumber_variance_density', overwrite=True
+            self.e * self.groupspeed / (np.pi * 2),
+            "wavenumber_variance_density",
+            overwrite=True,
         )
         data_array = data_array.assign_coords({NAME_K: wavenumber})
         return data_array
@@ -622,14 +647,19 @@ class WaveSpectrum(ABC):
         """
         wavenumber = self.wavenumber
         data_array = set_conventions(
-            self.wavenumber_spectral_density * wavenumber ** 3,'saturation_spectrum', overwrite=True)
+            self.wavenumber_spectral_density * wavenumber**3,
+            "saturation_spectrum",
+            overwrite=True,
+        )
         data_array = data_array.assign_coords({NAME_K: wavenumber})
         return data_array
 
     @property
     def slope_spectrum(self) -> DataArray:
         wavenumber = self.wavenumber
-        data_array = set_conventions(self.e * wavenumber ** 2, 'slope_spectrum', overwrite=True)
+        data_array = set_conventions(
+            self.e * wavenumber**2, "slope_spectrum", overwrite=True
+        )
         data_array = data_array.assign_coords({NAME_K: wavenumber})
         return data_array
 
@@ -643,7 +673,11 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        return set_conventions(_integrate(self.slope_spectrum, NAME_F, fmin, fmax),'mean_squared_slope', overwrite=True)
+        return set_conventions(
+            _integrate(self.slope_spectrum, NAME_F, fmin, fmax),
+            "mean_squared_slope",
+            overwrite=True,
+        )
 
     def m2(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -654,7 +688,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: Second order frequency moment.
         """
-        return set_conventions(self.frequency_moment(2, fmin, fmax), 'M2', overwrite=True)
+        return set_conventions(
+            self.frequency_moment(2, fmin, fmax), "M2", overwrite=True
+        )
 
     def hm0(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -665,7 +701,7 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: Significant wave height
         """
-        return set_conventions(4 * np.sqrt(self.m0(fmin, fmax)), 'Hm0', overwrite=True)
+        return set_conventions(4 * np.sqrt(self.m0(fmin, fmax)), "Hm0", overwrite=True)
 
     def tm01(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -676,7 +712,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: Mean period
         """
-        return set_conventions(self.m0(fmin, fmax) / self.m1(fmin, fmax),'Tm01', overwrite=True)
+        return set_conventions(
+            self.m0(fmin, fmax) / self.m1(fmin, fmax), "Tm01", overwrite=True
+        )
 
     def tm02(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -686,7 +724,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: Zero crossing period
         """
-        return set_conventions(np.sqrt(self.m0(fmin, fmax) / self.m2(fmin, fmax)), 'Tm02', overwrite=True)
+        return set_conventions(
+            np.sqrt(self.m0(fmin, fmax) / self.m2(fmin, fmax)), "Tm02", overwrite=True
+        )
 
     def peak_index(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -696,12 +736,12 @@ class WaveSpectrum(ABC):
         :return: peak indices
         """
         mask = (self.dataset[NAME_F].values >= fmin) & (
-                self.dataset[NAME_F].values < fmax
+            self.dataset[NAME_F].values < fmax
         )
         return self.e.where(mask, 0).argmax(dim=NAME_F)
 
     def peak_frequency(
-            self, fmin: float = 0.0, fmax: float = np.inf, use_spline=False, **kwargs
+        self, fmin: float = 0.0, fmax: float = np.inf, use_spline=False, **kwargs
     ) -> DataArray:
         """
         Peak frequency of the spectrum, i.e. frequency at which the spectrum
@@ -731,9 +771,11 @@ class WaveSpectrum(ABC):
             )
         else:
             da = self.dataset[NAME_F][self.peak_index(fmin, fmax)]
-        return set_conventions(da, 'peak_frequency', overwrite=True)
+        return set_conventions(da, "peak_frequency", overwrite=True)
 
-    def peak_angular_frequency(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+    def peak_angular_frequency(
+        self, fmin: float = 0.0, fmax: float = np.inf
+    ) -> DataArray:
         """
         Peak angular frequency of the spectrum.
 
@@ -741,14 +783,14 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return: peak frequency
         """
-        return set_conventions(self.peak_frequency(fmin, fmax) * np.pi * 2,'peak_angular_frequency', overwrite=True)
+        return set_conventions(
+            self.peak_frequency(fmin, fmax) * np.pi * 2,
+            "peak_angular_frequency",
+            overwrite=True,
+        )
 
     def peak_period(
-            self,
-            fmin: float = 0.0,
-            fmax: float = np.inf,
-            use_spline=False,
-            **kwargs
+        self, fmin: float = 0.0, fmax: float = np.inf, use_spline=False, **kwargs
     ) -> DataArray:
         """
         Peak period of the spectrum.
@@ -765,14 +807,14 @@ class WaveSpectrum(ABC):
         )
         peak_period = peak_period.drop_vars(names=NAME_F, errors="ignore")
 
-        return set_conventions(peak_period, 'Tp', overwrite=True)
+        return set_conventions(peak_period, "Tp", overwrite=True)
 
     def peak_direction(
-            self,
-            fmin: float = 0.0,
-            fmax: float = np.inf,
-            directional_unit: DirectionalUnit = 'degree',
-            directional_convention: DirectionalConvention = 'mathematical'
+        self,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+        directional_unit: DirectionalUnit = "degree",
+        directional_convention: DirectionalConvention = "mathematical",
     ) -> DataArray:
         """
         Direction of the peak of the spectrum. The direction is expressed in degree anti-clockwise from east and
@@ -786,20 +828,24 @@ class WaveSpectrum(ABC):
         :param fmin: minimum frequency, inclusive
         :param fmax: maximum frequency, inclusive
         :param directional_unit: units of the output angle, one of 'degree' or 'radians'
-        :param directional_convention: convention of the output angle, one of 'mathematical' or 'nautical'
+        :param directional_convention: convention of the output angle, one of 'mathematical' or 'oceanographical'
             or 'meteorological'
         :return: peak direction
         """
         index = self.peak_index(fmin, fmax)
         return wave_mean_direction(
-            self.a1.isel(**{NAME_F: index}), self.b1.isel(**{NAME_F: index}), directional_unit, directional_convention,
-            'peak_direction')
+            self.a1.isel(**{NAME_F: index}),
+            self.b1.isel(**{NAME_F: index}),
+            directional_unit,
+            directional_convention,
+            "peak_direction",
+        )
 
     def peak_directional_spread(
-            self,
-            fmin: float = 0.0,
-            fmax: float = np.inf,
-            directional_unit: DirectionalUnit = 'degree'
+        self,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+        directional_unit: DirectionalUnit = "degree",
     ) -> DataArray:
         """
         Directional spread of the peak of the spectrum. The spread is expressed in degree and calculated in terms of
@@ -816,12 +862,14 @@ class WaveSpectrum(ABC):
         index = self.peak_index(fmin, fmax)
         a1 = self.a1.isel(**{NAME_F: index})
         b1 = self.b1.isel(**{NAME_F: index})
-        return wave_directional_spread(a1, b1, unit=directional_unit, name='peak_directional_spread')
+        return wave_directional_spread(
+            a1, b1, unit=directional_unit, name="peak_directional_spread"
+        )
 
     def mean_direction_per_frequency(
-            self,
-            directional_unit: DirectionalUnit = 'degree',
-            directional_convention: DirectionalConvention = 'mathematical'
+        self,
+        directional_unit: DirectionalUnit = "degree",
+        directional_convention: DirectionalConvention = "mathematical",
     ) -> DataArray:
         """
         Mean direction of each frequency bin. The direction is expressed in degree anti-clockwise from east and
@@ -833,14 +881,18 @@ class WaveSpectrum(ABC):
         pitch-and-roll buoy wave data. Journal of physical oceanography, 18(7), 1020-1034.
 
         :param directional_unit: units of the output angle, one of 'degree' or 'radians'
-        :param directional_convention: convention of the output angle, one of 'mathematical' or 'nautical'
+        :param directional_convention: convention of the output angle, one of 'mathematical' or 'oceanographical'
             or 'meteorological'
 
         :return: direction
         """
-        return wave_mean_direction(self.a1, self.b1, directional_unit, directional_convention, 'direction')
+        return wave_mean_direction(
+            self.a1, self.b1, directional_unit, directional_convention, "direction"
+        )
 
-    def mean_spread_per_frequency(self, directional_unit: DirectionalUnit = 'degree') -> DataArray:
+    def mean_spread_per_frequency(
+        self, directional_unit: DirectionalUnit = "degree"
+    ) -> DataArray:
         """
         Directional spread of each frequency bin. The spread is expressed in degree and calculated in terms of
         the definition by Kuik et al. (1988), their equation 34.
@@ -852,9 +904,13 @@ class WaveSpectrum(ABC):
 
         :return: directional spread
         """
-        return wave_directional_spread(self.a1, self.b1, directional_unit, 'directional_spread')
+        return wave_directional_spread(
+            self.a1, self.b1, directional_unit, "directional_spread"
+        )
 
-    def _spectral_weighted(self, _property: DataArray, fmin: float = 0.0, fmax: float = np.inf):
+    def _spectral_weighted(
+        self, _property: DataArray, fmin: float = 0.0, fmax: float = np.inf
+    ):
         """
         Calculate the spectral weighted mean property.
         :param _property: spectral property to calculate weighted mean for
@@ -865,11 +921,12 @@ class WaveSpectrum(ABC):
         return _integrate(_property * self.e, NAME_F, fmin, fmax) / self.m0(fmin, fmax)
 
     def mean_direction(
-            self,
-            fmin: float = 0.0,
-            fmax: float = np.inf,
-            directional_unit: DirectionalUnit = 'degree',
-            directional_convention: DirectionalConvention = 'mathematical') -> DataArray:
+        self,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+        directional_unit: DirectionalUnit = "degree",
+        directional_convention: DirectionalConvention = "mathematical",
+    ) -> DataArray:
         """
         Mean direction the spectrum. Per default the direction is expressed in degree anti-clockwise from east and
         represents the direction the waves travel *to*.
@@ -884,19 +941,24 @@ class WaveSpectrum(ABC):
         :param fmin: minimum frequency, inclusive
         :param fmax: maximum frequency, inclusive
         :param directional_unit: units of the output angle, one of 'degree' or 'radians'
-        :param directional_convention: convention of the output angle, one of 'mathematical' or 'nautical'
+        :param directional_convention: convention of the output angle, one of 'mathematical' or 'oceanographical'
             or 'meteorological'
         :return: mean direction
         """
 
         return wave_mean_direction(
-            self.mean_a1(fmin, fmax), self.mean_b1(fmin, fmax), directional_unit, directional_convention,'mean_direction')
+            self.mean_a1(fmin, fmax),
+            self.mean_b1(fmin, fmax),
+            directional_unit,
+            directional_convention,
+            "mean_direction",
+        )
 
     def mean_directional_spread(
-            self,
-            fmin: float = 0.0,
-            fmax: float = np.inf,
-            directional_unit: DirectionalUnit = 'degree',
+        self,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+        directional_unit: DirectionalUnit = "degree",
     ) -> DataArray:
         """
         Mean directional spread of the spectrum. Calculated according to Kuik et al. (1988), their equation 33,
@@ -911,7 +973,11 @@ class WaveSpectrum(ABC):
         :return: peak direction
         """
         return wave_directional_spread(
-            self.mean_a1(fmin, fmax), self.mean_b1(fmin, fmax), directional_unit,'mean_directional_spread')
+            self.mean_a1(fmin, fmax),
+            self.mean_b1(fmin, fmax),
+            directional_unit,
+            "mean_directional_spread",
+        )
 
     def mean_a1(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -924,7 +990,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        return set_conventions(self._spectral_weighted(self.a1, fmin, fmax), 'a1',overwrite=True)
+        return set_conventions(
+            self._spectral_weighted(self.a1, fmin, fmax), "a1", overwrite=True
+        )
 
     def mean_b1(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -936,7 +1004,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        return set_conventions(self._spectral_weighted(self.b1, fmin, fmax), 'b1',overwrite=True)
+        return set_conventions(
+            self._spectral_weighted(self.b1, fmin, fmax), "b1", overwrite=True
+        )
 
     def mean_a2(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -948,7 +1018,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        return set_conventions(self._spectral_weighted(self.a2, fmin, fmax), 'a2',overwrite=True)
+        return set_conventions(
+            self._spectral_weighted(self.a2, fmin, fmax), "a2", overwrite=True
+        )
 
     def mean_b2(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
@@ -960,7 +1032,9 @@ class WaveSpectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        return set_conventions(self._spectral_weighted(self.b2, fmin, fmax), 'b2',overwrite=True)
+        return set_conventions(
+            self._spectral_weighted(self.b2, fmin, fmax), "b2", overwrite=True
+        )
 
     @property
     def depth(self) -> DataArray:
@@ -983,10 +1057,10 @@ class WaveSpectrum(ABC):
                     data=np.full(self.space_time_shape(), np.inf),
                     dims=self.dims_space_time,
                     coords=self.coords_space_time,
-                    name='Depth [m]',
+                    name="Depth [m]",
                 )
 
-        return set_conventions(data_array, NAME_DEPTH,overwrite=True)
+        return set_conventions(data_array, NAME_DEPTH, overwrite=True)
 
     @property
     def groupspeed(self) -> DataArray:
@@ -1005,11 +1079,19 @@ class WaveSpectrum(ABC):
         for dim in return_dimensions:
             coords[dim] = self.dataset[dim].values
 
-        return set_conventions(DataArray(
-            data=intrinsic_group_speed(k, depth, physics_options=_as_physicsoptions_lwt(self.physics_options)),
-            dims=return_dimensions,
-            coords=coords,
-        ),'group_speed',overwrite=True)
+        return set_conventions(
+            DataArray(
+                data=intrinsic_group_speed(
+                    k,
+                    depth,
+                    physics_options=_as_physicsoptions_lwt(self.physics_options),
+                ),
+                dims=return_dimensions,
+                coords=coords,
+            ),
+            "group_speed",
+            overwrite=True,
+        )
 
     @property
     def wavenumber(self) -> DataArray:
@@ -1023,7 +1105,9 @@ class WaveSpectrum(ABC):
 
         # For numba (used in the dispersion relation) we need raw numpy arrays of the correct dimension
         depth = self.depth.expand_dims(dim=NAME_F, axis=-1).values
-        radian_frequency = self.angular_frequency.expand_dims(dim=self.depth.dims).values
+        radian_frequency = self.angular_frequency.expand_dims(
+            dim=self.depth.dims
+        ).values
 
         # Construct the output coordinates and dimension of the data array
         return_dimensions = (*self.dims_space_time, NAME_F)
@@ -1034,15 +1118,22 @@ class WaveSpectrum(ABC):
         return set_conventions(
             DataArray(
                 data=inverse_intrinsic_dispersion_relation(
-                    radian_frequency, depth, physics_options=_as_physicsoptions_lwt(self.physics_options)),
+                    radian_frequency,
+                    depth,
+                    physics_options=_as_physicsoptions_lwt(self.physics_options),
+                ),
                 dims=return_dimensions,
                 coords=coords,
-            ), 'wavenumber', overwrite=True
+            ),
+            "wavenumber",
+            overwrite=True,
         )
 
     @property
     def wavelength(self) -> DataArray:
-        return set_conventions(2 * np.pi / self.wavenumber, 'wavelength', overwrite=True)
+        return set_conventions(
+            2 * np.pi / self.wavenumber, "wavelength", overwrite=True
+        )
 
     @property
     def peak_wavenumber(self) -> DataArray:
@@ -1052,15 +1143,19 @@ class WaveSpectrum(ABC):
         for dim in self.dims_space_time:
             coords[dim] = self.dataset[dim].values
 
-        return set_conventions(DataArray(
-            data=inverse_intrinsic_dispersion_relation(
-                self.angular_frequency[index].values,
-                self.depth.values,
-                physics_options=_as_physicsoptions_lwt(self.physics_options),
+        return set_conventions(
+            DataArray(
+                data=inverse_intrinsic_dispersion_relation(
+                    self.angular_frequency[index].values,
+                    self.depth.values,
+                    physics_options=_as_physicsoptions_lwt(self.physics_options),
+                ),
+                dims=self.dims_space_time,
+                coords=coords,
             ),
-            dims=self.dims_space_time,
-            coords=coords,
-        ), 'peak_wavenumber', overwrite=True)
+            "peak_wavenumber",
+            overwrite=True,
+        )
 
     @property
     def significant_waveheight(self) -> DataArray:
@@ -1113,9 +1208,9 @@ class WaveSpectrum(ABC):
             ([0], np.cumsum(frequency_step.values))
         )
         integration_frequencies = (
-                integration_frequencies
-                - frequency_step.values[0] / 2
-                + self.frequency.values[0]
+            integration_frequencies
+            - frequency_step.values[0] / 2
+            + self.frequency.values[0]
         )
         values = (self.variance_density * frequency_step).values
 
@@ -1130,9 +1225,13 @@ class WaveSpectrum(ABC):
 
         coords = {str(coor): self.coords[coor].values for coor in self.coords}
         coords[NAME_F] = integration_frequencies
-        return set_conventions(DataArray(data=cumsum, dims=self.dims, coords=coords),'cdf', overwrite=True)
+        return set_conventions(
+            DataArray(data=cumsum, dims=self.dims, coords=coords), "cdf", overwrite=True
+        )
 
-    def interpolate(self: _T, coordinates, extrapolation_value=0.0, method='linear', **kwargs) -> _T:
+    def interpolate(
+        self: _T, coordinates, extrapolation_value=0.0, method="linear", **kwargs
+    ) -> _T:
         """
         Interpolate the spectrum to the given coordinates. The coordinates should be a dictionary with the dimension
         name as key and the coordinate as value. Uses the xarray interp method. Extrapolation is done by filling the
@@ -1143,16 +1242,26 @@ class WaveSpectrum(ABC):
         :param method: interpolation method to use (see xarray interp method)
         :return: interpolated spectrum object
         """
-        if 'time' in coordinates:
-            coordinates['time'] = to_datetime64(coordinates['time'])
+        if "time" in coordinates:
+            coordinates["time"] = to_datetime64(coordinates["time"])
 
         spectrum = self.__class__(
-            self.dataset.interp(coords=coordinates, method=method, kwargs={'fill_value': extrapolation_value}),
-            **kwargs)
+            self.dataset.interp(
+                coords=coordinates,
+                method=method,
+                kwargs={"fill_value": extrapolation_value},
+            ),
+            **kwargs,
+        )
         spectrum.fillna(extrapolation_value)
         return spectrum
 
-    def bandpass(self: _T, fmin: float = 0., fmax: float = np.inf, interpolate_to_limits: bool = True) -> _T:
+    def bandpass(
+        self: _T,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+        interpolate_to_limits: bool = True,
+    ) -> _T:
         """
         Bandpass the spectrum to the given limits such that the frequency coordinates of the spectrum are given as
 
@@ -1168,15 +1277,26 @@ class WaveSpectrum(ABC):
 
         for name in self.dataset:
             if name in SPECTRAL_VARS:
-                data = _bandpass(self.dataset[name], fmin, fmax, dim=NAME_F, interpolate=interpolate_to_limits)
+                data = _bandpass(
+                    self.dataset[name],
+                    fmin,
+                    fmax,
+                    dim=NAME_F,
+                    interpolate=interpolate_to_limits,
+                )
                 dataset = dataset.assign({name: data})
             else:
                 dataset = dataset.assign({name: self.dataset[name]})
         cls = type(self)
         return cls(dataset)
 
-    def interpolate_frequency(self: _T, new_frequencies, extrapolation_value: float = 0.0, method: str = "linear",
-                              **kwargs, ) -> _T:
+    def interpolate_frequency(
+        self: _T,
+        new_frequencies,
+        extrapolation_value: float = 0.0,
+        method: str = "linear",
+        **kwargs,
+    ) -> _T:
         """
         Interpolate the spectrum to the given frequencies. Convenience method for interpolate. See interpolate for
         more information.
@@ -1187,7 +1307,10 @@ class WaveSpectrum(ABC):
         :return: Interpolated spectrum
         """
         _object = self.interpolate(
-            {NAME_F: new_frequencies}, extrapolation_value=extrapolation_value, method=method, **kwargs
+            {NAME_F: new_frequencies},
+            extrapolation_value=extrapolation_value,
+            method=method,
+            **kwargs,
         )
         _object.fillna(extrapolation_value)
         return _object
@@ -1226,7 +1349,7 @@ class WaveSpectrum(ABC):
         return cls(dataset)
 
     def multiply(
-            self, array: np.ndarray, dimensions: List[str] = None, inplace=False
+        self, array: np.ndarray, dimensions: List[str] = None, inplace=False
     ) -> _T:
         """
         Multiply the variance density with the given numpy array. Broadcasting is performed automatically if dimensions
@@ -1280,7 +1403,9 @@ class WaveSpectrum(ABC):
 ########################################################################################################################
 
 
-def _integrate(data: DataArray, dim: str, lower_limit=-np.inf, upper_limit=np.inf) -> DataArray:
+def _integrate(
+    data: DataArray, dim: str, lower_limit=-np.inf, upper_limit=np.inf
+) -> DataArray:
     """
     Integrate the data along the given dimension using the xarray integration method. We first bandpass the data
     to the given limits and then integrate to ensure we integrate over the requested limits
@@ -1294,30 +1419,26 @@ def _integrate(data: DataArray, dim: str, lower_limit=-np.inf, upper_limit=np.in
     )
 
 
-def _bandpass(data: DataArray, _min: Number, _max: Number, dim: str, interpolate: bool = False) -> DataArray:
+def _bandpass(
+    data: DataArray, _min: Number, _max: Number, dim: str, interpolate: bool = False
+) -> DataArray:
     coord = data[dim]
 
     if _min >= _max:
         raise ValueError(f"max must be larger than min, {_min} >= {_max}")
 
     # Check if there are actual bounds on the domain, if not, we can just return the data
-    _domain_is_bounded = (np.isfinite(_min) or np.isfinite(_max))
+    _domain_is_bounded = np.isfinite(_min) or np.isfinite(_max)
     if not _domain_is_bounded:
         return data
 
     if not interpolate:
         # Get frequency mask for [ fmin, fmax )
-        _range = (
-                (coord.values >= _min) &
-                (coord.values <= _max)
-        )
+        _range = (coord.values >= _min) & (coord.values <= _max)
 
         return data.isel({dim: _range})
 
-    _range = (
-            (coord.values > _min) &
-            (coord.values < _max)
-    )
+    _range = (coord.values > _min) & (coord.values < _max)
     coords = coord[_range]
 
     # We may have to interpolate the spectrum to get the correct frequency for the min and max cut-off
@@ -1330,21 +1451,13 @@ def _bandpass(data: DataArray, _min: Number, _max: Number, dim: str, interpolate
     if np.isfinite(_max):
         # If fmax is finite we may need to add it:
         coords = concat(
-            [
-                coords,
-                DataArray([_max], dims=dim, coords={dim: [_max]})
-            ],
-            dim=dim
+            [coords, DataArray([_max], dims=dim, coords={dim: [_max]})], dim=dim
         )
 
     if np.isfinite(_min):
         # If fmin is larger than 0 we may have to add it if the first frequency is larger than fmin.
         coords = concat(
-            [
-                DataArray([_min], dims=dim, coords={dim: [_min]}),
-                coords
-            ],
-            dim=dim
+            [DataArray([_min], dims=dim, coords={dim: [_min]}), coords], dim=dim
         )
 
     return data.interp({dim: coords})
