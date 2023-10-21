@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewavespectrum",
-    version="0.0.3",
+    version="0.0.4",
     license="Apache 2 License",
     install_requires=[
         "numpy",
@@ -15,6 +15,7 @@ setuptools.setup(
         "xarray",
         "scipy",
         "numbaprogress",
+        "pandas",
     ],
     extras_require={
         "full": [
