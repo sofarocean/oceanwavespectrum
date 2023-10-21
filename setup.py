@@ -14,7 +14,7 @@ setuptools.setup(
         "linearwavetheory",
         "xarray",
         "scipy",
-        "numbaprogress",
+        "numba-progress",
         "pandas",
     ],
     extras_require={
