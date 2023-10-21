@@ -16,3 +16,4 @@ qpsolvers
 cvxopt
 zarr
 s3fs
+pdoc

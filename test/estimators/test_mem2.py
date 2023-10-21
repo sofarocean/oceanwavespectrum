@@ -1,35 +1,41 @@
-from roguewavespectrum.parametric import create_parametric_frequency_direction_spectrum
+from roguewavespectrum.parametric import (
+    parametric_directional_spectrum,
+    DirCosineN,
+    FreqPiersonMoskowitz,
+)
+
 import numpy
-from roguewavespectrum import concatenate_spectra, FrequencyDirectionSpectrum
+from roguewavespectrum import concatenate_spectra, Spectrum2D
 from datetime import datetime, timezone
 from numpy.testing import assert_allclose
 from roguewavespectrum.estimators import (
-    mem2_newton_solver,
-    initial_value,
-    moment_constraints,
-    mem2_directional_distribution,
-    mem2_jacobian,
-    get_direction_increment,
+    _mem2_newton_solver,
+    _initial_value,
+    _moment_constraints,
+    _mem2_directional_distribution,
+    _mem2_jacobian,
+    _get_direction_increment,
 )
 from scipy.optimize import root
 
 
-def get_2d_spec() -> FrequencyDirectionSpectrum:
+def get_2d_spec() -> Spectrum2D:
     freq = numpy.linspace(0, 1, 20)
     dir = numpy.linspace(0, 360, 36, endpoint=False)
     time = datetime(2022, 1, 1, tzinfo=timezone.utc)
-    spec = create_parametric_frequency_direction_spectrum(
-        freq,
-        frequency_shape="pm",
-        peak_frequency_hertz=0.1,
-        significant_wave_height=1,
-        direction_degrees=dir,
-        direction_shape="raised_cosine",
-        mean_direction_degrees=35,
-        width_degrees=20,
-    )
 
-    return concatenate_spectra([spec], "time") # type: ignore
+    frequency_shape = FreqPiersonMoskowitz(
+        peak_frequency_hertz=0.1, significant_waveheight_meter=1
+    )
+    direction_shape = DirCosineN(mean_direction_degrees=35, width_degrees=20)
+    spec = parametric_directional_spectrum(
+        freq,
+        dir,
+        frequency_shape,
+        direction_shape,
+        time=time,
+    )
+    return concatenate_spectra([spec], "time")  # type: ignore
 
 
 def get_case(case):
@@ -51,7 +57,7 @@ def get_case(case):
         moments = [0.458456 + 0.06, -0.848485, -0.515151, -0.753666]
 
     directions_radians = numpy.linspace(0, 360, 36, endpoint=False) * numpy.pi / 180
-    direction_increment = get_direction_increment(directions_radians)
+    direction_increment = _get_direction_increment(directions_radians)
     twiddle_factors = numpy.zeros((4, 36))
     twiddle_factors[0, :] = numpy.cos(directions_radians)
     twiddle_factors[1, :] = numpy.sin(directions_radians)
@@ -68,17 +74,17 @@ def get_case(case):
 def desired_distribution(icase):
     moments, directions_radians, direction_increment, twiddle_factors = get_case(icase)
     a1, b1, a2, b2 = moments
-    guess = initial_value(
+    guess = _initial_value(
         numpy.array(a1), numpy.array(b1), numpy.array(a2), numpy.array(b2)
     )
     res = root(
-        moment_constraints,
+        _moment_constraints,
         guess,
         args=(twiddle_factors, moments, direction_increment),
         method="lm",
     )
     lambas = res.x
-    return mem2_directional_distribution(lambas, direction_increment, twiddle_factors)
+    return _mem2_directional_distribution(lambas, direction_increment, twiddle_factors)
 
 
 def test_mem2():
@@ -115,10 +121,10 @@ def test_estimate_distribution_newton():
             icase
         )
         a1, b1, a2, b2 = moments
-        guess = initial_value(
+        guess = _initial_value(
             numpy.array(a1), numpy.array(b1), numpy.array(a2), numpy.array(b2)
         )
-        actual_dist = mem2_newton_solver(
+        actual_dist = _mem2_newton_solver(
             moments, guess, direction_increment, twiddle_factors
         )
 
@@ -137,16 +143,16 @@ def test_jacobian():
     for icase in range(0, 4):
         moments, _, direction_increment, twiddle_factors = get_case(icase)
         a1, b1, a2, b2 = moments
-        lambdas = initial_value(
+        lambdas = _initial_value(
             numpy.array(a1), numpy.array(b1), numpy.array(a2), numpy.array(b2)
         )
         jacobian = numpy.zeros((4, 4))
-        jacobian = mem2_jacobian(
+        jacobian = _mem2_jacobian(
             lambdas, twiddle_factors, direction_increment, jacobian
         )
 
         def F(x):
-            return moment_constraints(x, twiddle_factors, moments, direction_increment)
+            return _moment_constraints(x, twiddle_factors, moments, direction_increment)
 
         for mm in range(0, 4):
             for nn in range(0, 4):

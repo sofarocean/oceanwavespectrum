@@ -1,16 +1,20 @@
 from roguewavespectrum.parametric import (
-    create_frequency_shape,
-    create_directional_shape,
-    create_parametric_frequency_direction_spectrum,
+    DirCosineN,
+    FreqPiersonMoskowitz,
+    parametric_directional_spectrum,
 )
 from numpy.testing import assert_allclose
 from numpy import linspace, argmax, sum, trapz
 
+
 def test_raised_cosine():
-    distribution = create_directional_shape(
-        "raised_cosine", mean_direction_degrees=20, width_degrees=28.64
+    distribution = DirCosineN(mean_direction_degrees=20, width_degrees=28.64)
+    assert_allclose(
+        distribution.width_degrees_to_power(distribution.width_degrees),
+        2,
+        rtol=0.002,
+        atol=0.003,
     )
-    assert_allclose(distribution._power, 2, rtol=0.002, atol=0.003)
 
     angles = linspace(0, 360, 36, endpoint=False)
     D = distribution.values(angles)
@@ -19,7 +23,9 @@ def test_raised_cosine():
 
 
 def test_pierson_moskowitz():
-    distribution = create_frequency_shape("pm", peak_frequency_hertz=0.1, m0=1)
+    distribution = FreqPiersonMoskowitz(
+        peak_frequency_hertz=0.1, significant_waveheight_meter=4
+    )
     frequency = linspace(0.01, 1, 100, endpoint=True)
     E = distribution.values(frequency)
 
@@ -33,16 +39,12 @@ def test_pierson_moskowitz():
 def test_create_parametric_spectrum():
     angles = linspace(0, 360, 36, endpoint=False)
     frequency = linspace(0.01, 1, 100, endpoint=True)
-    spectrum = create_parametric_frequency_direction_spectrum(
-        frequency,
-        frequency_shape="pm",
-        peak_frequency_hertz=0.1,
-        significant_wave_height=2,
-        direction_degrees=angles,
-        direction_shape="raised_cosine",
-        mean_direction_degrees=20,
-        width_degrees=10,
+    dir_shape = DirCosineN(mean_direction_degrees=20, width_degrees=10)
+    freq_shape = FreqPiersonMoskowitz(
+        peak_frequency_hertz=0.1, significant_waveheight_meter=2
     )
+
+    spectrum = parametric_directional_spectrum(frequency, angles, freq_shape, dir_shape)
 
     assert_allclose(spectrum.significant_waveheight.values, 2, rtol=0.001, atol=0.001)
     assert_allclose(spectrum.peak_frequency().values, 0.1, rtol=0.001, atol=0.001)

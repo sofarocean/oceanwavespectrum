@@ -1,13 +1,12 @@
-from .wavespectrum import (
-    WaveSpectrum
-)
+from .spectrum import Spectrum
 from .variable_names import SPECTRAL_VARS
-from .wavespectrum1D import FrequencySpectrum
+from .wavespectrum1D import Spectrum1D
 from typing import Sequence
 from xarray import concat, Dataset, DataArray
 from .extrapolate import numba_fill_zeros_or_nan_in_tail
 
-def concatenate_spectra(spectra: Sequence[WaveSpectrum], dim=None, **kwargs) -> WaveSpectrum:
+
+def concatenate_spectra(spectra: Sequence[Spectrum], dim=None, **kwargs) -> Spectrum:
     """
     Concatenate along the given dimension. If the dimension does not exist a new dimension will be created. Under the
     hood this calls the concat function of xarray. Named arguments to that function can be applied here as well.
@@ -42,11 +41,11 @@ def concatenate_spectra(spectra: Sequence[WaveSpectrum], dim=None, **kwargs) -> 
 
 
 def fill_zeros_or_nan_in_tail(
-    spectrum: WaveSpectrum,
+    spectrum: Spectrum,
     power=None,
     tail_energy=None,
     tail_bounds=None,
-) -> FrequencySpectrum:
+) -> Spectrum1D:
     variance_density = spectrum.e
     a1 = spectrum.a1
     b1 = spectrum.b1
@@ -88,4 +87,4 @@ def fill_zeros_or_nan_in_tail(
         else:
             dataset = dataset.assign({name: spectrum.dataset[name]})
 
-    return FrequencySpectrum(dataset)
+    return Spectrum1D(dataset)

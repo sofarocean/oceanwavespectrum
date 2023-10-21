@@ -1,14 +1,17 @@
 import numpy as np
 
 from roguewavespectrum import (
-    FrequencySpectrum,
-    FrequencyDirectionSpectrum,
-    load_spectrum_from_netcdf,
+    Spectrum1D,
+    Spectrum2D,
     concatenate_spectra,
 )
-from roguewavespectrum.parametric import create_parametric_frequency_direction_spectrum
+from roguewavespectrum.parametric import (
+    parametric_directional_spectrum,
+    DirCosineN,
+    FreqPiersonMoskowitz,
+)
 from linearwavetheory._constants import GRAV
-from roguewavespectrum.time import to_datetime64
+from roguewavespectrum._time import to_datetime64
 from numpy import linspace, inf, ndarray, pi, array, ones, nan, sqrt
 from numpy.testing import assert_allclose
 from datetime import datetime, timezone, timedelta
@@ -17,18 +20,17 @@ from xarray import DataArray
 import os
 
 
-def helper_create_spectrum() -> FrequencyDirectionSpectrum:
+def helper_create_spectrum() -> Spectrum2D:
     angles = helper_angles()
     frequency = helper_frequency()
-    return create_parametric_frequency_direction_spectrum(
+    frequency_shape = FreqPiersonMoskowitz(0.1, 2)
+    direction_shape = DirCosineN(20, 10)
+
+    return parametric_directional_spectrum(
         frequency_hertz=frequency,
-        frequency_shape="pm",
-        peak_frequency_hertz=0.1,
-        significant_wave_height=2,
         direction_degrees=angles,
-        direction_shape="raised_cosine",
-        mean_direction_degrees=20,
-        width_degrees=10,
+        frequency_shape=frequency_shape,
+        direction_shape=direction_shape,
         longitude=10,
         latitude=11,
         time=datetime(2022, 10, 1, 6, 0, 0, tzinfo=timezone.utc),
@@ -67,12 +69,14 @@ def helper_time(N, hour_offset=None):
         offset = timedelta(hours=0)
 
     return [
-        datetime(2022, 10, 1, 6, 0, 0, tzinfo=timezone.utc) + ii * timedelta(hours=1) + offset
+        datetime(2022, 10, 1, 6, 0, 0, tzinfo=timezone.utc)
+        + ii * timedelta(hours=1)
+        + offset
         for ii in range(0, N)
     ]
 
 
-def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[FrequencyDirectionSpectrum]:
+def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Spectrum2D]:
     """
     Helper to create a list of spectra
     :return:
@@ -82,21 +86,20 @@ def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Frequency
     waveheights = helper_waveheights(N)
     latitude = helper_latitude(N)
     longitude = helper_longitude(N)
-    time = helper_time(N,hour_offset)
+    time = helper_time(N, hour_offset)
     depth = helper_depth(N, depth)
 
     out = []
     for ii, wh in enumerate(waveheights):
+        frequency_shape = FreqPiersonMoskowitz(0.1, wh)
+        direction_shape = DirCosineN(20, 10)
+
         out.append(
-            create_parametric_frequency_direction_spectrum(
+            parametric_directional_spectrum(
                 frequency_hertz=frequency,
-                frequency_shape="pm",
-                peak_frequency_hertz=0.1,
-                significant_wave_height=wh,
                 direction_degrees=angles,
-                direction_shape="raised_cosine",
-                mean_direction_degrees=20,
-                width_degrees=10,
+                frequency_shape=frequency_shape,
+                direction_shape=direction_shape,
                 longitude=longitude[ii],
                 latitude=latitude[ii],
                 time=time[ii],
@@ -106,9 +109,7 @@ def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Frequency
     return out
 
 
-def helper_create_spectra(
-    N, depth=inf
-) -> Tuple[FrequencyDirectionSpectrum, FrequencySpectrum]:
+def helper_create_spectra(N, depth=inf) -> Tuple[Spectrum2D, Spectrum1D]:
     spectra = helper_create_spectra_list(N=N, depth=depth)
     spectra = concatenate_spectra(spectra, dim="time")
     return spectra, spectra.as_frequency_spectrum()
@@ -136,16 +137,19 @@ def test_concatenate():
     assert spectrum.significant_waveheight.dims[0] == "latitude"
     assert_allclose(spectrum.significant_waveheight[-1], 4, 1e-3, 1e-3)
 
-    spectrum =  [
+    spectrum = [
         concatenate_spectra(spectra, dim="time"),
-        concatenate_spectra(helper_create_spectra_list(N=N, hour_offset=24), dim="time")
-        ]
+        concatenate_spectra(
+            helper_create_spectra_list(N=N, hour_offset=24), dim="time"
+        ),
+    ]
 
     # Concatenate with given dimension
     spectra2 = concatenate_spectra(spectrum, dim="time")
 
     # Concatenate without given dimension
     spectra3 = concatenate_spectra(spectrum)
+
 
 def test_concatenate_1d():
     N = 4
@@ -178,14 +182,15 @@ def test_concatenate_1d():
 def test_save_and_load():
     spec = helper_create_spectrum()
     spec.to_netcdf("test.nc")
-    new_spec = load_spectrum_from_netcdf("test.nc")
+
+    new_spec = Spectrum2D.from_netcdf("test.nc")
     assert_allclose(spec.hm0(), new_spec.hm0(), 1e-4, 1e-4)
     os.remove("test.nc")
 
     spec = concatenate_spectra(helper_create_spectra_list(4), dim="time")
     spec.to_netcdf("test2.nc")
 
-    new_spec = load_spectrum_from_netcdf("test2.nc")
+    new_spec = Spectrum2D.from_netcdf("test2.nc")
     assert_allclose(spec.hm0(), new_spec.hm0(), 1e-4, 1e-4)
     os.remove("test2.nc")
 
@@ -209,6 +214,7 @@ def test_isel():
         assert data.shape[0] == 2
         assert data.time[0] == time[0]
 
+
 def test_spectrum1d():
     spec = helper_create_spectrum()
     spec1d = spec.as_frequency_spectrum()
@@ -221,7 +227,7 @@ def test_spectrum2d():
 
     for method in ["mem2", "mem"]:
         for solution_method in ["scipy", "newton", "approximate"]:
-            print(method, solution_method,spec1d)
+            print(method, solution_method, spec1d)
             spec2d = spec1d.as_frequency_direction_spectrum(
                 72, method=method, solution_method=solution_method
             )
@@ -259,16 +265,16 @@ def helper_assert(
 def test_frequency_moment():
     specs = helper_create_spectra(4)
     full_canary_values = np.array([0.00489166, 0.00869629, 0.01358795, 0.01956665])
-    limited_canary_values = np.array([0.00285983, 0.00508413, 0.00794396, 0.0114393 ])
+    limited_canary_values = np.array([0.00285983, 0.00508413, 0.00794396, 0.0114393])
 
     for spec in specs:
         helper_assert(spec.frequency_moment(2), ["time"], (4,), full_canary_values)
-        helper_assert(spec.frequency_moment(2,fmin=0.1,fmax=0.2), ["time"], (4,), limited_canary_values)
-
-
-
-
-
+        helper_assert(
+            spec.frequency_moment(2, fmin=0.1, fmax=0.2),
+            ["time"],
+            (4,),
+            limited_canary_values,
+        )
 
 
 def test_number_of_frequencies():
@@ -318,7 +324,7 @@ def test_variance_density():
     specs = helper_create_spectra(4)
     for spec in specs:
 
-        if isinstance(spec, FrequencySpectrum):
+        if isinstance(spec, Spectrum1D):
             helper_assert(
                 spec.variance_density,
                 ["time", "frequency"],
@@ -392,6 +398,7 @@ def test_hm0():
     hm0 = helper_waveheights(4)
     for spec in specs:
         helper_assert(spec.hm0(), ["time"], (4,), hm0)
+
 
 def test_hm0_partial():
     specs = helper_create_spectra(4)
@@ -677,6 +684,7 @@ def test_interpolate_frequency():
     assert_allclose(
         intp_spec.mean_direction(), spec.mean_direction(), rtol=1e-3, atol=1e-3
     )
+
 
 def test_wavenumber_spectral_density():
     specs = helper_create_spectra(4)

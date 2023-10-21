@@ -15,11 +15,10 @@ from .variable_names import (
     SPECTRAL_VARS,
     SPECTRAL_MOMENTS,
     SPECTRAL_DIMS,
-    SPACE_TIME_DIMS
+    SPACE_TIME_DIMS,
 )
 
-from .wavespectrum import WaveSpectrum
-from .wavespectrum1D import FrequencySpectrum, GroupedFrequencySpectrum
-from .wavespectrum2D import FrequencyDirectionSpectrum
-from .io import load_spectrum_from_netcdf
+from .spectrum import Spectrum
+from .wavespectrum1D import Spectrum1D, DrifterSpectrum
+from .wavespectrum2D import Spectrum2D
 from .operations import concatenate_spectra, fill_zeros_or_nan_in_tail

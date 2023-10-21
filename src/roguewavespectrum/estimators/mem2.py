@@ -1,7 +1,21 @@
 """
-Implementation of the "MEM2" method:
 
-see Kim1995:
+Maximum entropy method 2
+========================
+This module contains functions that implements the MEM2 method (see Kim1995 and references therein) and is used to
+estimate the directional distribution that maximizes the enthrophy of the solution with entrophy defined as
+    $$\\int - D * log(D) \\, d\\theta$$
+
+such that the resulting distribution $D(\theta)$ reproduces the observed moments. I.e.
+    $$\\int  D \\, d\\theta= 1$$
+    $$\\int \\cos(\\theta) D \\, d\\theta = a_1 $$
+    $$\\int \\sin(\\theta) D \\, d\\theta = b_1 $$
+    $$\\int \\cos(2\\theta) D \\, d\\theta = a_2$$
+    $$\\int \\sin(2\\theta) D \\, d\\theta = b_2$$
+and
+    $$ D(\\theta) \\geq 0$$
+
+References:
 
     Kim, T., Lin, L. H., & Wang, H. (1995). Application of maximum entropy method
     to the real sea data. In Coastal Engineering 1994 (pp. 340-355).
@@ -9,14 +23,11 @@ see Kim1995:
     link: https://icce-ojs-tamu.tdl.org/icce/index.php/icce/article/download/4967/4647
     (working as of May 29, 2022)
 
-and references therein.
-
 """
-import numpy
+
 import numpy as np
 from scipy.optimize import root
 import typing
-from .mem import numba_mem
 from numba import njit, prange
 from numba.typed import Dict as NumbaDict
 from numba.core import types
@@ -28,7 +39,7 @@ _FASTMATH = True
 _PARALLEL = False
 
 # Numerical settings used in solving for the mem2 distribution
-NUMERICS = {
+_NUMERICS = {
     # absolute tolerence stopping criterium. let moment = [ a1,b1,a2,b2] and let iterate_moment contain the moments
     # calculated from the current estmitaed distribution. The stopping criterium is:
     #     norm( moment-iterate_moment ) < atol
@@ -53,38 +64,60 @@ NUMERICS = {
 
 
 def mem2(
-    directions_radians: numpy.ndarray,
-    a1: numpy.ndarray,
-    b1: numpy.ndarray,
-    a2: numpy.ndarray,
-    b2: numpy.ndarray,
+    directions_radians: np.ndarray,
+    a1: np.ndarray,
+    b1: np.ndarray,
+    a2: np.ndarray,
+    b2: np.ndarray,
     progress_bar: ProgressBar = None,
     solution_method="newton",
     solver_config=None,
-) -> numpy.ndarray:
+) -> np.ndarray:
     """
+    Estimate the directional distribution from the Fourier moments using the MEM2 method.
 
-    :param directions_radians:
-    :param a1:
-    :param b1:
-    :param a2:
-    :param b2:
-    :param solution_method:
-    :return:
+    :param directions_radians: 1d array of wave directions in radians,
+    length[number_of_directions]
+
+    :param a1: 1d array of cosine directional moment as function of position and frequency,
+        shape = ( number_of_points,number_of_frequencies)
+
+    :param b1: 1d array of sine directional moment as function of position and frequency,
+        shape = ( number_of_points,number_of_frequencies)
+
+    :param a2: 1d array of double angle cosine directional moment as function of position and frequency,
+        shape = ( number_of_points,number_of_frequencies)
+
+    :param b2: 1d array of double angle sine directional moment as function of position and frequency,
+        shape = ( number_of_points,number_of_frequencies)
+
+    :param progress_bar: Progress bar instance if updates are desired.
+
+    :param solution_method: Method used to solve the nonlinear system of equations. Can be one of: "scipy", "newton".
+    The scipy method is a wrapper around scipy.optimize.root. The newton method is a custom implementation of the
+    newton method in numba. The newton method is faster than the scipy method but occasionally fails to converge. When
+    this happens the method falls back to the MEM method.
+
+    :param solver_config: Dictionary of solver settings. See _NUMERICS for default values.
+
+    :return: array with shape [numbet_of_points, number_of_frequencies,number_of_direction]
+    representing the directional distribution of the waves at each frequency.
+
+
     """
 
     if solver_config is None:
-        solver_config = NUMERICS
+        solver_config = _NUMERICS
 
     else:
-        solver_config = NUMERICS | solver_config
+        solver_config = _NUMERICS | solver_config
 
     if solution_method == "scipy":
-        func = mem2_scipy_root_finder
+        func = _mem2_scipy_root_finder
         kwargs = {}
 
     elif solution_method == "newton":
-        func = mem2_newton
+        func = _mem2_newton
         numba_solver_config = NumbaDict.empty(
             key_type=types.unicode_type, value_type=types.float64
         )
@@ -94,7 +127,7 @@ def mem2(
         kwargs = {"config": numba_solver_config}
 
     elif solution_method == "approximate":
-        func = mem2_newton
+        func = _mem2_newton
         kwargs = {"approximate": True}
 
     else:
@@ -105,15 +138,15 @@ def mem2(
 
 # Scipy Implementation
 # =============================================================================
-def mem2_scipy_root_finder(
-    directions_radians: numpy.ndarray,
-    a1: typing.Union[numpy.ndarray, float],
-    b1: typing.Union[numpy.ndarray, float],
-    a2: typing.Union[numpy.ndarray, float],
-    b2: typing.Union[numpy.ndarray, float],
+def _mem2_scipy_root_finder(
+    directions_radians: np.ndarray,
+    a1: typing.Union[np.ndarray, float],
+    b1: typing.Union[np.ndarray, float],
+    a2: typing.Union[np.ndarray, float],
+    b2: typing.Union[np.ndarray, float],
     progress,
     **kwargs
-) -> numpy.ndarray:
+) -> np.ndarray:
     """
     Return the directional distribution that maximizes Shannon [ - D log(D) ]
     enthrophy constrained by given observed directional moments,
@@ -147,24 +180,24 @@ def mem2_scipy_root_finder(
     number_of_frequencies = a1.shape[-1]
     number_of_points = a1.shape[0]
 
-    directional_distribution = numpy.zeros(
+    directional_distribution = np.zeros(
         (number_of_points, number_of_frequencies, len(directions_radians))
     )
 
-    direction_increment = get_direction_increment(directions_radians)
+    direction_increment = _get_direction_increment(directions_radians)
 
-    twiddle_factors = numpy.empty((4, len(directions_radians)))
-    twiddle_factors[0, :] = numpy.cos(directions_radians)
-    twiddle_factors[1, :] = numpy.sin(directions_radians)
-    twiddle_factors[2, :] = numpy.cos(2 * directions_radians)
-    twiddle_factors[3, :] = numpy.sin(2 * directions_radians)
+    twiddle_factors = np.empty((4, len(directions_radians)))
+    twiddle_factors[0, :] = np.cos(directions_radians)
+    twiddle_factors[1, :] = np.sin(directions_radians)
+    twiddle_factors[2, :] = np.cos(2 * directions_radians)
+    twiddle_factors[3, :] = np.sin(2 * directions_radians)
 
-    guess = initial_value(a1, b1, a2, b2)
+    guess = _initial_value(a1, b1, a2, b2)
     for ipoint in range(0, number_of_points):
         progress.update(1)
         for ifreq in range(0, number_of_frequencies):
             #
-            moments = numpy.array(
+            moments = np.array(
                 [
                     a1[ipoint, ifreq],
                     b1[ipoint, ifreq],
@@ -173,18 +206,18 @@ def mem2_scipy_root_finder(
                 ]
             )
 
-            if numpy.any(numpy.isnan(guess[ipoint, ifreq, :])):
+            if np.any(np.isnan(guess[ipoint, ifreq, :])):
                 continue
 
             res = root(
-                moment_constraints,
+                _moment_constraints,
                 guess[ipoint, ifreq, :],
                 args=(twiddle_factors, moments, direction_increment),
                 method="lm",
             )
             lambas = res.x
 
-            directional_distribution[ipoint, ifreq, :] = mem2_directional_distribution(
+            directional_distribution[ipoint, ifreq, :] = _mem2_directional_distribution(
                 lambas, direction_increment, twiddle_factors
             )
 
@@ -195,22 +228,18 @@ def mem2_scipy_root_finder(
 # =============================================================================
 
 
-# spatial iteration
-# ---------------------
-
-
 # To note; enabling caching seems to not play nice with paralel
 @njit(parallel=_PARALLEL, cache=(not _PARALLEL))
-def mem2_newton(
-    directions_radians: numpy.ndarray,
-    a1: numpy.ndarray,
-    b1: numpy.ndarray,
-    a2: numpy.ndarray,
-    b2: numpy.ndarray,
+def _mem2_newton(
+    directions_radians: np.ndarray,
+    a1: np.ndarray,
+    b1: np.ndarray,
+    a2: np.ndarray,
+    b2: np.ndarray,
     progress_bar: ProgressBar = None,
     config: NumbaDict = None,
     approximate: bool = False,
-) -> numpy.ndarray:
+) -> np.ndarray:
     """
     Return the directional distribution that maximizes Shannon [ - D log(D) ]
     enthrophy constrained by given observed directional moments.
@@ -246,18 +275,17 @@ def mem2_newton(
     number_of_frequencies = a1.shape[-1]
     number_of_points = a1.shape[0]
 
-    directional_distribution = numpy.zeros(
+    directional_distribution = np.zeros(
         (number_of_points, number_of_frequencies, len(directions_radians))
     )
 
     direction_increment_downward_difference = (
-        directions_radians - numpy.roll(directions_radians, 1) + numpy.pi
-    ) % (2 * numpy.pi) - numpy.pi
+        directions_radians - np.roll(directions_radians, 1) + np.pi
+    ) % (2 * np.pi) - np.pi
 
     direction_increment_upward_difference = (
-        -(directions_radians - numpy.roll(directions_radians, -1) + numpy.pi)
-        % (2 * numpy.pi)
-        - numpy.pi
+        -(directions_radians - np.roll(directions_radians, -1) + np.pi) % (2 * np.pi)
+        - np.pi
     )
 
     direction_increment = (
@@ -265,13 +293,13 @@ def mem2_newton(
     ) / 2
 
     # Calculate the needed Fourier transform twiddle factors to calculate moments.
-    twiddle_factors = numpy.empty((4, len(directions_radians)))
-    twiddle_factors[0, :] = numpy.cos(directions_radians)
-    twiddle_factors[1, :] = numpy.sin(directions_radians)
-    twiddle_factors[2, :] = numpy.cos(2 * directions_radians)
-    twiddle_factors[3, :] = numpy.sin(2 * directions_radians)
+    twiddle_factors = np.empty((4, len(directions_radians)))
+    twiddle_factors[0, :] = np.cos(directions_radians)
+    twiddle_factors[1, :] = np.sin(directions_radians)
+    twiddle_factors[2, :] = np.cos(2 * directions_radians)
+    twiddle_factors[3, :] = np.sin(2 * directions_radians)
 
-    guess = initial_value(a1, b1, a2, b2)
+    guess = _initial_value(a1, b1, a2, b2)
     for ipoint in prange(0, number_of_points):
         if progress_bar is not None:
             progress_bar.update(1)
@@ -328,8 +356,8 @@ def _mem2_newton_point(
     number_of_frequencies = a1.shape[0]
     for ifreq in range(0, number_of_frequencies):
         #
-        moments = numpy.array([a1[ifreq], b1[ifreq], a2[ifreq], b2[ifreq]])
-        out[ifreq, :] = mem2_newton_solver(
+        moments = np.array([a1[ifreq], b1[ifreq], a2[ifreq], b2[ifreq]])
+        out[ifreq, :] = _mem2_newton_solver(
             moments,
             guess[ifreq, :],
             direction_increment,
@@ -344,14 +372,14 @@ def _mem2_newton_point(
 
 
 @njit(cache=True)
-def mem2_newton_solver(
-    moments: numpy.ndarray,
-    guess: numpy.ndarray,
-    direction_increment: numpy.ndarray,
-    twiddle_factors: numpy.ndarray,
+def _mem2_newton_solver(
+    moments: np.ndarray,
+    guess: np.ndarray,
+    direction_increment: np.ndarray,
+    twiddle_factors: np.ndarray,
     config=None,
     approximate=False,
-) -> numpy.ndarray:
+) -> np.ndarray:
     """
     Newton iteration to find the solution to the non-linear system of constraint equations defining the lagrange
     multipliers in the MEM2 method. Because the Lagrange multipliers enter the equations as exponents the system can
@@ -381,26 +409,26 @@ def mem2_newton_solver(
             config["use_mem_when_failing_to_converge"] > 0.0
         )
 
-    directional_distribution = numpy.empty(len(direction_increment))
-    if numpy.any(numpy.isnan(guess)):
+    directional_distribution = np.empty(len(direction_increment))
+    if np.any(np.isnan(guess)):
         directional_distribution[:] = 0
         return directional_distribution
 
     if approximate:
-        directional_distribution[:] = mem2_directional_distribution(
+        directional_distribution[:] = _mem2_directional_distribution(
             guess, direction_increment, twiddle_factors
         )
         return directional_distribution
 
     current_iterate = guess
-    current_func = moment_constraints(
+    current_func = _moment_constraints(
         current_iterate,
         twiddle_factors,
         moments,
         direction_increment,
     )
 
-    jacobian = numpy.empty((4, 4))
+    jacobian = np.empty((4, 4))
 
     convergence = False
     for iter in range(0, max_iter):
@@ -420,13 +448,13 @@ def mem2_newton_solver(
         #
         #       delta = next_lagrange_multiplier_iterate-cur_lagrange_multiplier_iterate
 
-        jacobian = mem2_jacobian(
+        jacobian = _mem2_jacobian(
             current_iterate, twiddle_factors, direction_increment, jacobian
         )
         try:
-            update_iterate = solve_cholesky(jacobian, -current_func)
+            update_iterate = _solve_cholesky(jacobian, -current_func)
         except Exception:
-            update_iterate = numpy.linalg.lstsq(jacobian, -current_func, rcond=rcond)[0]
+            update_iterate = np.linalg.lstsq(jacobian, -current_func, rcond=rcond)[0]
 
         magnitude_current_iterate = norm(current_iterate)
         magnitude_update = norm(update_iterate)
@@ -436,7 +464,7 @@ def mem2_newton_solver(
         line_search_factor = 1
         for ii in range(max_line_search_depth):
             next_iterate = current_iterate + line_search_factor * update_iterate
-            next_func = moment_constraints(
+            next_func = _moment_constraints(
                 next_iterate, twiddle_factors, moments, direction_increment
             )
 
@@ -463,14 +491,14 @@ def mem2_newton_solver(
 
     if not convergence:
         if use_mem_when_failing_to_converge:
-            directions = numpy.arctan2(twiddle_factors[1, :], twiddle_factors[0, :])
-            directional_distribution[:] = numba_mem(
+            directions = np.arctan2(twiddle_factors[1, :], twiddle_factors[0, :])
+            directional_distribution[:] = _numba_mem(
                 directions, moments[0], moments[1], moments[2], moments[3]
             )
         else:
             raise ValueError("we did not converge")
 
-    directional_distribution[:] = mem2_directional_distribution(
+    directional_distribution[:] = _mem2_directional_distribution(
         current_iterate, direction_increment, twiddle_factors
     )
 
@@ -482,7 +510,7 @@ def mem2_newton_solver(
 
 
 @njit(cache=True, fastmath=_FASTMATH)
-def moment_constraints(lambdas, twiddle_factors, moments, direction_increment):
+def _moment_constraints(lambdas, twiddle_factors, moments, direction_increment):
     """
     Construct the nonlinear equations we need to solve for lambda. The constrainst are the difference between the
     desired moments a1,b1,a2,b2 and the moment calculated from the current distribution guess and for a perfect fit
@@ -501,11 +529,11 @@ def moment_constraints(lambdas, twiddle_factors, moments, direction_increment):
     """
 
     # Get the current estimate of the directional distribution
-    dist = mem2_directional_distribution(lambdas, direction_increment, twiddle_factors)
-    out = numpy.zeros(4)
+    dist = _mem2_directional_distribution(lambdas, direction_increment, twiddle_factors)
+    out = np.zeros(4)
     for mm in range(0, 4):
         # note - the part after the "-" is just a discrete approximation of the Fourier sine/cosine amplitude (moment)
-        out[mm] = moments[mm] - numpy.sum(
+        out[mm] = moments[mm] - np.sum(
             (twiddle_factors[mm, :]) * dist * direction_increment
         )
 
@@ -513,7 +541,7 @@ def moment_constraints(lambdas, twiddle_factors, moments, direction_increment):
 
 
 @njit(cache=True, fastmath=_FASTMATH)
-def mem2_jacobian(lagrange_multiplier, twiddle_factors, direction_increment, jacobian):
+def _mem2_jacobian(lagrange_multiplier, twiddle_factors, direction_increment, jacobian):
     """
     Calculate the jacobian of the constraint equations. The resulting jacobian is a square and positive definite matrix
 
@@ -523,7 +551,7 @@ def mem2_jacobian(lagrange_multiplier, twiddle_factors, direction_increment, jac
 
     :return: a 4 by 4 matrix that is the Jacobian of the constraint equations.
     """
-    inner_product = numpy.zeros(twiddle_factors.shape[1])
+    inner_product = np.zeros(twiddle_factors.shape[1])
     for jj in range(0, 4):
         inner_product = inner_product + lagrange_multiplier[jj] * twiddle_factors[jj, :]
 
@@ -531,28 +559,28 @@ def mem2_jacobian(lagrange_multiplier, twiddle_factors, direction_increment, jac
     # multiplyig with a constant - which is fine since we normalize anyway. Effectively- this avoids overflow errors
     # (or infinities) - at the expense of underflowing (which is less of an issue).
     #
-    inner_product = inner_product - numpy.min(inner_product)
+    inner_product = inner_product - np.min(inner_product)
 
-    normalization = 1 / numpy.sum(numpy.exp(-inner_product) * direction_increment)
-    shape = numpy.exp(-inner_product)
+    normalization = 1 / np.sum(np.exp(-inner_product) * direction_increment)
+    shape = np.exp(-inner_product)
 
-    normalization_derivative = numpy.zeros(4)
+    normalization_derivative = np.zeros(4)
     for mm in range(0, 4):
-        normalization_derivative[mm] = normalization * numpy.sum(
-            twiddle_factors[mm, :] * numpy.exp(-inner_product) * direction_increment
+        normalization_derivative[mm] = normalization * np.sum(
+            twiddle_factors[mm, :] * np.exp(-inner_product) * direction_increment
         )
 
     # To note- we have to multiply seperately to avoid potential underflow/overflow errors.
     normalization_derivative = normalization_derivative * normalization
 
-    shape_derivative = numpy.zeros((4, twiddle_factors.shape[1]))
+    shape_derivative = np.zeros((4, twiddle_factors.shape[1]))
     for mm in range(0, 4):
         shape_derivative[mm, :] = -twiddle_factors[mm, :] * shape
 
     for mm in range(0, 4):
         # we make use of symmetry and only explicitly calculate up to the diagonal
         for nn in range(0, mm + 1):
-            jacobian[mm, nn] = -numpy.sum(
+            jacobian[mm, nn] = -np.sum(
                 twiddle_factors[mm, :]
                 * direction_increment
                 * (
@@ -567,9 +595,9 @@ def mem2_jacobian(lagrange_multiplier, twiddle_factors, direction_increment, jac
 
 
 @njit(cache=True, fastmath=_FASTMATH)
-def mem2_directional_distribution(
+def _mem2_directional_distribution(
     lagrange_multiplier, direction_increment, twiddle_factors
-) -> numpy.ndarray:
+) -> np.ndarray:
     """
     Given the solution for the Lagrange multipliers- reconstruct the directional
     distribution.
@@ -578,20 +606,18 @@ def mem2_directional_distribution(
     :param direction_increment: directional stepsize used in the integration, nd-array
     :return: Directional distribution arrasy as a function of directions
     """
-    inner_product = numpy.zeros(twiddle_factors.shape[1])
+    inner_product = np.zeros(twiddle_factors.shape[1])
     for jj in range(0, 4):
         inner_product = inner_product + lagrange_multiplier[jj] * twiddle_factors[jj, :]
 
-    inner_product = inner_product - numpy.min(inner_product)
+    inner_product = inner_product - np.min(inner_product)
 
-    normalization = 1 / numpy.sum(numpy.exp(-inner_product) * direction_increment)
-    return numpy.exp(-inner_product) * normalization
+    normalization = 1 / np.sum(np.exp(-inner_product) * direction_increment)
+    return np.exp(-inner_product) * normalization
 
 
 @njit(cache=True, fastmath=_FASTMATH)
-def initial_value(
-    a1: numpy.ndarray, b1: numpy.ndarray, a2: numpy.ndarray, b2: numpy.ndarray
-):
+def _initial_value(a1: np.ndarray, b1: np.ndarray, a2: np.ndarray, b2: np.ndarray):
     """
     Initial guess of the Lagrange Multipliers according to the "MEM AP2" approximation
     found im Kim1995
@@ -602,7 +628,7 @@ def initial_value(
     :param b2: moment b2
     :return: initial guess of the lagrange multipliers, with the same leading dimensions as input.
     """
-    guess = numpy.empty((*a1.shape, 4))
+    guess = np.empty((*a1.shape, 4))
     fac = 1 + a1**2 + b1**2 + a2**2 + b2**2
     guess[..., 0] = 2 * a1 * a2 + 2 * b1 * b2 - 2 * a1 * fac
     guess[..., 1] = 2 * a1 * b2 - 2 * b1 * a2 - 2 * b1 * fac
@@ -612,15 +638,15 @@ def initial_value(
 
 
 @njit(cache=True, fastmath=True)
-def solve_cholesky(matrix, rhs):
+def _solve_cholesky(matrix, rhs):
     """
     Solve using cholesky decomposition according to the Cholesky–Banachiewicz algorithm.
     See: https://en.wikipedia.org/wiki/Cholesky_decomposition#The_Cholesky_algorithm
     """
     M, N = matrix.shape
-    x = numpy.zeros(M)
-    cholesky_decomposition = numpy.zeros((M, M))
-    inv = numpy.zeros(M)
+    x = np.zeros(M)
+    cholesky_decomposition = np.zeros((M, M))
+    inv = np.zeros(M)
 
     for mm in range(0, M):
         forward_sub_sum = rhs[mm]
@@ -641,7 +667,7 @@ def solve_cholesky(matrix, rhs):
                 "Matrix not positive definite, likely due to finite precision errors."
             )
 
-        cholesky_decomposition[mm, mm] = numpy.sqrt(sum)
+        cholesky_decomposition[mm, mm] = np.sqrt(sum)
         inv[mm] = 1 / cholesky_decomposition[mm, mm]
         x[mm] = forward_sub_sum * inv[mm]
 
@@ -655,8 +681,7 @@ def solve_cholesky(matrix, rhs):
     return x
 
 
-def get_direction_increment(
-        directions_radians: np.ndarray) -> np.ndarray:
+def _get_direction_increment(directions_radians: np.ndarray) -> np.ndarray:
     """
     calculate the stepsize used for midpoint integration. The directions
     represent the center of the interval - and we want to find the dimensions of
@@ -668,16 +693,83 @@ def get_direction_increment(
 
     # Calculate the forward difference appending the first entry to the back
     # of the array. Use modular trickery to ensure the angle is in [-pi,pi]
-    forward_diff = (np.diff(directions_radians,
-                               append=directions_radians[0]) + np.pi) % (
-                           2 * np.pi) - np.pi
+    forward_diff = (
+        np.diff(directions_radians, append=directions_radians[0]) + np.pi
+    ) % (2 * np.pi) - np.pi
 
     # Calculate the backward difference prepending the last entry to the front
     # of the array. Use modular trickery to ensure the angle is in [-pi,pi]
-    backward_diff = (np.diff(directions_radians,
-                                prepend=directions_radians[-1]) + np.pi) % (
-                            2 * np.pi) - np.pi
+    backward_diff = (
+        np.diff(directions_radians, prepend=directions_radians[-1]) + np.pi
+    ) % (2 * np.pi) - np.pi
 
     # The interval we are interested in is the average of the forward and backward
     # differences.
     return (forward_diff + backward_diff) / 2
+
+
+@njit(cache=True)
+def _numba_mem(
+    directions_radians: np.ndarray,
+    a1: float,
+    b1: float,
+    a2: float,
+    b2: float,
+) -> np.ndarray:
+    """
+    Numba implementation of the MEM function. We re-implement the MEM function here because we need to call it from
+    within a numba jit function.
+
+    :param directions_radians: 1d array of wave directions in radians,
+    length[number_of_directions]. (going to, anti-clockswise from east)
+
+    :param a1: 1d array of cosine directional moment as function of frequency,
+    length [number_of_frequencies]
+
+    :param b1: 1d array of sine directional moment as function of frequency,
+    length [number_of_frequencies]
+
+    :param a2: 1d array of double angle cosine directional moment as function
+    of frequency, length [number_of_frequencies]
+
+    :param b2: 1d array of double angle sine directional moment as function of
+    frequency, length [number_of_frequencies]
+
+    :return: array with shape [number_of_frequencies,number_of_direction]
+    representing the directional distribution of the waves at each frequency.
+
+    Maximize the enthrophy of the solution with entrophy defined as:
+
+           integrate log(D) over directions
+
+    such that the resulting distribution D reproduces the observed moments.
+
+    :return: Directional distribution as a numpy array
+
+    Note that:
+    d1 = a1; d2 =b1; d3 = a2 and d4=b2 in the defining equations 10.
+    """
+
+    number_of_directions = len(directions_radians)
+
+    c1 = a1 + 1j * b1
+    c2 = a2 + 1j * b2
+    #
+    # Eq. 13 L&K86
+    #
+    Phi1 = (c1 - c2 * np.conj(c1)) / (1 - c1 * np.conj(c1))
+    Phi2 = c2 - Phi1 * c1
+    #
+    e1 = np.exp(-directions_radians * 1j)
+    e2 = np.exp(-directions_radians * 2j)
+
+    numerator = 1 - Phi1 * np.conj(c1) - Phi2 * np.conj(c2)
+    denominator = np.abs(1 - Phi1 * e1 - Phi2 * e2) ** 2
+
+    D = np.real(numerator / denominator) / np.pi / 2
+
+    # Normalize to 1. in discrete sense
+    integralApprox = np.sum(D, axis=-1) * np.pi * 2.0 / number_of_directions
+    D = D / integralApprox
+
+    return D

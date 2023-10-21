@@ -1,18 +1,34 @@
-from roguewavespectrum.parametric import create_parametric_frequency_direction_spectrum
+from roguewavespectrum.parametric import (
+    parametric_directional_spectrum,
+    DirCosineN,
+    FreqPiersonMoskowitz,
+)
 import numpy
-from roguewavespectrum import concatenate_spectra, FrequencyDirectionSpectrum
+from roguewavespectrum import concatenate_spectra, Spectrum2D
 from datetime import datetime, timezone
 from numpy.testing import assert_allclose
 
 
-def get_2d_spec() -> FrequencyDirectionSpectrum:
+def get_2d_spec() -> Spectrum2D:
     freq = numpy.linspace(0, 1, 20)
     dir = numpy.linspace(0, 360, 36, endpoint=False)
     time = datetime(2022, 1, 1, tzinfo=timezone.utc)
-    spec = create_parametric_frequency_direction_spectrum(
-        freq, frequency_shape="pm", peak_frequency_hertz=0.1, significant_wave_height=1, direction_degrees=dir, direction_shape="raised_cosine",
-        mean_direction_degrees=35, width_degrees=20, depth=numpy.inf, time=time
+
+    frequency_shape = FreqPiersonMoskowitz(
+        peak_frequency_hertz=0.1, significant_waveheight_meter=1
     )
+    direction_shape = DirCosineN(mean_direction_degrees=35, width_degrees=20)
+    spec = parametric_directional_spectrum(
+        freq,
+        dir,
+        frequency_shape,
+        direction_shape,
+        time=time,
+    )
+    # spec = parametric_directional_spectrum(
+    #     freq, frequency_shape="pm", peak_frequency_hertz=0.1, significant_waveheight_meter=1, direction_degrees=dir, direction_shape="raised_cosine",
+    #     mean_direction_degrees=35, width_degrees=20, depth=numpy.inf, time=time
+    # )
     return concatenate_spectra([spec], "time")
 
 

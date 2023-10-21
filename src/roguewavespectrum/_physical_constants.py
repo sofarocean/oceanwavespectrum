@@ -11,6 +11,8 @@ WATER_TEMPERATURE_DEGREES_C = 15.0
 KINEMATIC_VISCOSITY_WATER = 1.19e-6
 VONKARMAN_CONSTANT = 0.4
 DYNAMIC_SURFACE_TENSION_WATER = 0.073
+PHILLIPS_CONSTANT = 0.0081
+
 
 class PhysicsOptions:
     """
@@ -27,13 +29,14 @@ class PhysicsOptions:
     - wave_regime: "deep", "intermediate", or "shallow", determines which limit of the dispersion relation to use for
         properties derived from the linear dispersion relation (wavenumber, groupspeed, etc.)
     """
+
     def __init__(
         self,
         density: float = WATER_DENSITY,
         temperature_degrees: float = WATER_TEMPERATURE_DEGREES_C,
         dynamic_viscosity: float = KINEMATIC_VISCOSITY_WATER * WATER_DENSITY,
         vonkarman_constant: float = VONKARMAN_CONSTANT,
-        dynamic_surface_tension: float= DYNAMIC_SURFACE_TENSION_WATER * WATER_DENSITY,
+        dynamic_surface_tension: float = DYNAMIC_SURFACE_TENSION_WATER * WATER_DENSITY,
         gravity: float = GRAVITATIONAL_ACCELERATION,
         wave_type: str = "gravity",
         wave_regime: str = "intermediate",
@@ -65,6 +68,7 @@ class PhysicsOptions:
     def kinematic_viscosity(self):
         return self.dynamic_viscosity / self.density
 
+
 PHYSICSOPTIONS = PhysicsOptions(
     density=WATER_DENSITY,
     temperature_degrees=WATER_TEMPERATURE_DEGREES_C,
@@ -77,7 +81,7 @@ PHYSICSOPTIONS = PhysicsOptions(
 )
 
 
-def _as_physicsoptions_lwt(physicsoptions:PhysicsOptions)->lwt.PhysicsOptions:
+def _as_physicsoptions_lwt(physicsoptions: PhysicsOptions) -> lwt.PhysicsOptions:
     """
     Convert a PhysicsOptions object to a PhysicsOptionsLWT object. This is used to pass the PhysicsOptions object
     to the linearwavetheory package.

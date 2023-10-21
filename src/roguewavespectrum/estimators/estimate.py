@@ -1,15 +1,19 @@
+"""
+Estimate
+======================
+Main module for estimating directional spectra from directional moments. Core functionality is provided by the
+`estimate_directional_spectrum_from_moments` function.
+"""
+
 import numpy
 from .mem2 import mem2
 from .mem import mem
 from numba_progress import ProgressBar
 from typing import Literal
 
-Estimators = Literal["mem", "mem2"]
+Estimators = Literal["mem", "mem2"]  #: Estimators type hint
 
 
-# -----------------------------------------------------------------------------
-#                       Boilerplate Interfaces
-# -----------------------------------------------------------------------------
 def estimate_directional_spectrum_from_moments(
     e: numpy.ndarray,
     a1: numpy.ndarray,
@@ -21,11 +25,26 @@ def estimate_directional_spectrum_from_moments(
     **kwargs,
 ) -> numpy.ndarray:
     """
-    Construct a 2D directional distribution based on the directional moments and a spectral
-    reconstruction method.
+    Construct a 2D directional energy spectrum based on the directional moments and a specified spectral reconstruction
+    method.
 
-    :param number_of_directions: length of the directional vector for the
-    2D spectrum. Directions returned are in degrees
+    :param e: nd array of variance/energy density as a function of frequency. The trailing dimension is assumed to be
+    the frequency dimension.
+
+    :param a1: nd array of cosine directional moment as function of frequency. The trailing dimension is assumed to be
+    the frequency dimension.
+
+    :param b1: nd array of sine directional moment as function of frequency. The trailing dimension is assumed to be
+    the frequency dimension.
+
+    :param a2: nd array of double angle cosine directional moment as function
+    of frequency. The trailing dimension is assumed to be the frequency dimension.
+
+    :param b2: nd array of double angle sine directional moment as function of
+    frequency, The trailing dimension is assumed to be the frequency dimension.
+
+    :param direction: 1d array of wave directions in radians. Directional convention is the same as associated with
+    the Fourier moments (typically going to, anti-clockswise from east).
 
     :param method: Choose a method in ['mem','mem2']
         mem: maximum entrophy (in the Boltzmann sense) method
@@ -34,6 +53,8 @@ def estimate_directional_spectrum_from_moments(
 
         mem2: use entrophy (in the Shannon sense) to maximize. Likely
         best method see- Benoit, M. (1993).
+
+    :return: numpy.ndarray of shape (..., number_of_directions) containing the directional energy spectrum
 
     REFERENCES:
     Benoit, M. (1993). Practical comparative performance survey of methods
@@ -46,12 +67,12 @@ def estimate_directional_spectrum_from_moments(
 
     """
     return (
-        estimate_directional_distribution(a1, b1, a2, b2, direction, method, **kwargs)
+        _estimate_directional_distribution(a1, b1, a2, b2, direction, method, **kwargs)
         * e[..., None]
     )
 
 
-def estimate_directional_distribution(
+def _estimate_directional_distribution(
     a1: numpy.ndarray,
     b1: numpy.ndarray,
     a2: numpy.ndarray,
@@ -62,28 +83,7 @@ def estimate_directional_distribution(
 ) -> numpy.ndarray:
     """
     Construct a 2D directional distribution based on the directional moments and a spectral
-    reconstruction method.
-
-    :param number_of_directions: length of the directional vector for the
-    2D spectrum. Directions returned are in degrees
-
-    :param method: Choose a method in ['mem','mem2']
-        mem: maximum entrophy (in the Boltzmann sense) method
-        Lygre, A., & Krogstad, H. E. (1986). Explicit expression and
-        fast but tends to create narrow spectra anderroneous secondary peaks.
-
-        mem2: use entrophy (in the Shannon sense) to maximize. Likely
-        best method see- Benoit, M. (1993).
-
-    REFERENCES:
-    Benoit, M. (1993). Practical comparative performance survey of methods
-        used for estimating directional wave spectra from heave-pitch-roll data.
-        In Coastal Engineering 1992 (pp. 62-75).
-
-    Lygre, A., & Krogstad, H. E. (1986). Maximum entropy estimation of the
-        directional distribution in ocean wave spectra.
-        Journal of Physical Oceanography, 16(12), 2052-2060.
-
+    reconstruction method. See `estimate_directional_spectrum_from_moments` for argument details.
     """
 
     # Jacobian to transform distribution as function of radian angles into

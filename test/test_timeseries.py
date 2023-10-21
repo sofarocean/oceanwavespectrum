@@ -1,4 +1,4 @@
-from roguewavespectrum import timeseries, parametric
+from roguewavespectrum import _timeseries, parametric
 import numpy
 from numpy.testing import assert_allclose
 
@@ -8,23 +8,23 @@ def test_timeseries_spec_1d():
     significant_waveheight = 5
 
     frequencies = numpy.linspace(0, sampling_frequency, 256, endpoint=False)
+    frequency_shape = parametric.FreqPiersonMoskowitz(
+        peak_frequency_hertz=0.1, significant_waveheight_meter=significant_waveheight
+    )
+    direction_shape = parametric.DirCosineN(mean_direction_degrees=0, width_degrees=30)
     directions = numpy.linspace(0, 360, 36, endpoint=False)
-    spectrum = parametric.create_parametric_frequency_direction_spectrum(
+    spectrum = parametric.parametric_directional_spectrum(
         frequencies,
-        frequency_shape="pm",
-        peak_frequency_hertz=0.1,
-        significant_wave_height=significant_waveheight,
-        direction_degrees=directions,
-        direction_shape="raised_cosine",
-        mean_direction_degrees=0,
-        width_degrees=30,
+        directions,
+        frequency_shape,
+        direction_shape,
     )
     spec1d = spectrum.as_frequency_spectrum()
 
-    time, z = timeseries.surface_timeseries(
+    time, z = _timeseries.surface_timeseries(
         "z", sampling_frequency, int(400 * sampling_frequency), spec1d
     )
-    time, w = timeseries.surface_timeseries(
+    time, w = _timeseries.surface_timeseries(
         "w", sampling_frequency, int(400 * sampling_frequency), spec1d
     )
 
@@ -41,34 +41,39 @@ def test_timeseries_spec_2d():
     directions = numpy.linspace(0, 360, 144, endpoint=False)
 
     def get_sigs(direction, width):
-        spectrum = parametric.create_parametric_frequency_direction_spectrum(
-            frequencies,
-            frequency_shape="pm",
+        frequencies = numpy.linspace(0, sampling_frequency, 256, endpoint=False)
+        frequency_shape = parametric.FreqPiersonMoskowitz(
             peak_frequency_hertz=0.1,
-            significant_wave_height=significant_waveheight,
-            direction_degrees=directions,
-            direction_shape="raised_cosine",
-            mean_direction_degrees=direction,
-            width_degrees=width,
+            significant_waveheight_meter=significant_waveheight,
+        )
+        direction_shape = parametric.DirCosineN(
+            mean_direction_degrees=direction, width_degrees=width
+        )
+        directions = numpy.linspace(0, 360, 36, endpoint=False)
+        spectrum = parametric.parametric_directional_spectrum(
+            frequencies,
+            directions,
+            frequency_shape,
+            direction_shape,
         )
 
         # Note due to the "standing wave effect" we need a long time series to get a proper signal.
-        time, x = timeseries.surface_timeseries(
+        time, x = _timeseries.surface_timeseries(
             "x", sampling_frequency, 100000 * sampling_frequency, spectrum
         )
-        time, y = timeseries.surface_timeseries(
+        time, y = _timeseries.surface_timeseries(
             "y", sampling_frequency, 100000 * sampling_frequency, spectrum
         )
-        time, z = timeseries.surface_timeseries(
+        time, z = _timeseries.surface_timeseries(
             "z", sampling_frequency, 100000 * sampling_frequency, spectrum
         )
-        time, w = timeseries.surface_timeseries(
+        time, w = _timeseries.surface_timeseries(
             "w", sampling_frequency, 100000 * sampling_frequency, spectrum
         )
-        time, u = timeseries.surface_timeseries(
+        time, u = _timeseries.surface_timeseries(
             "u", sampling_frequency, 100000 * sampling_frequency, spectrum
         )
-        time, v = timeseries.surface_timeseries(
+        time, v = _timeseries.surface_timeseries(
             "v", sampling_frequency, 100000 * sampling_frequency, spectrum
         )
         sigs = [u, v, w, x, y, z]

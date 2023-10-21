@@ -1,13 +1,13 @@
 import numpy
 import numpy as np
 
-from .wavespectrum import WaveSpectrum
+from .spectrum import Spectrum
 from roguewavespectrum.estimators.estimate import (
-    estimate_directional_distribution,
+    estimate_directional_spectrum_from_moments,
     Estimators,
 )
-from roguewavespectrum.time import to_datetime64
-from roguewavespectrum.physical_constants import PhysicsOptions
+from roguewavespectrum._time import to_datetime64
+from roguewavespectrum._physical_constants import PhysicsOptions
 from typing import TypeVar, Literal
 from xarray import Dataset, DataArray, zeros_like, ones_like, concat
 from .spline_interpolation import cumulative_frequency_interpolation_1d_variable
@@ -23,17 +23,17 @@ from .variable_names import (
     SPECTRAL_VARS,
     set_conventions,
 )
-from .wavespectrum2D import FrequencyDirectionSpectrum
+from .wavespectrum2D import Spectrum2D
 from .extrapolate import numba_fill_zeros_or_nan_in_tail
 
 _T = TypeVar("_T")
 
 
-class FrequencySpectrum(WaveSpectrum):
+class Spectrum1D(Spectrum):
     def __init__(
         self, dataset: Dataset, physics_options: PhysicsOptions = None, **kwargs
     ):
-        super(FrequencySpectrum, self).__init__(
+        super(Spectrum1D, self).__init__(
             dataset, physics_options=physics_options, **kwargs
         )
         for name in [NAME_F, NAME_e]:
@@ -61,12 +61,12 @@ class FrequencySpectrum(WaveSpectrum):
         return self._spectrum
 
     def interpolate_frequency(
-        self: "FrequencySpectrum",
+        self: "Spectrum1D",
         new_frequencies,
         extrapolation_value=0.0,
         method: Literal["nearest", "linear", "spline"] = "linear",
         **kwargs,
-    ) -> "FrequencySpectrum":
+    ) -> "Spectrum1D":
 
         if isinstance(new_frequencies, DataArray):
             new_frequencies = new_frequencies.values
@@ -77,7 +77,7 @@ class FrequencySpectrum(WaveSpectrum):
             interpolated_data = cumulative_frequency_interpolation_1d_variable(
                 new_frequencies, self.dataset, frequency_axis=frequency_axis, **kwargs
             )
-            object = FrequencySpectrum(interpolated_data)
+            object = Spectrum1D(interpolated_data)
             object.fillna(extrapolation_value)
             return object
         else:
@@ -124,7 +124,7 @@ class FrequencySpectrum(WaveSpectrum):
                 interpolated_data[name] / interpolated_data[NAME_e]
             )
 
-        object = FrequencySpectrum(interpolated_data)
+        object = Spectrum1D(interpolated_data)
         object.fillna(extrapolation_value)
         return object
 
@@ -193,7 +193,7 @@ class FrequencySpectrum(WaveSpectrum):
         tail_bounds=None,
         tail_moments=None,
         tail_frequency=None,
-    ) -> "FrequencySpectrum":
+    ) -> "Spectrum1D":
         """
         Extrapolate the tail using the given power
         :param end_frequency: frequency to extrapolate to
@@ -268,9 +268,9 @@ class FrequencySpectrum(WaveSpectrum):
             else:
                 dataset = dataset.assign({name: self.dataset[name]})
 
-        return FrequencySpectrum(dataset)
+        return Spectrum1D(dataset)
 
-    def downsample(self, frequencies) -> "FrequencySpectrum":
+    def downsample(self, frequencies) -> "Spectrum1D":
         cdf = self.cumulative_density_function()
         diff = numpy.diff(
             frequencies,
@@ -314,28 +314,26 @@ class FrequencySpectrum(WaveSpectrum):
                 continue
             data[x] = (self.dims_space_time, self.dataset[x].values)
 
-        return FrequencySpectrum(Dataset(data_vars=data, coords=coords))
+        return Spectrum1D(Dataset(data_vars=data, coords=coords))
 
     def as_frequency_direction_spectrum(
         self,
         number_of_directions,
         method: Estimators = "mem2",
         solution_method="scipy",
-    ) -> "FrequencyDirectionSpectrum":
+    ) -> "Spectrum2D":
 
         direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)
 
-        output_array = (
-            estimate_directional_distribution(
-                self.a1.values,
-                self.b1.values,
-                self.a2.values,
-                self.b2.values,
-                direction,
-                method=method,
-                solution_method=solution_method,
-            )
-            * self.e.values[..., None]
+        output_array = estimate_directional_spectrum_from_moments(
+            self.e.values,
+            self.a1.values,
+            self.b1.values,
+            self.a2.values,
+            self.b2.values,
+            direction,
+            method=method,
+            solution_method=solution_method,
         )
 
         dims = self.dims_space_time + [NAME_F, NAME_D]
@@ -348,10 +346,10 @@ class FrequencySpectrum(WaveSpectrum):
                 continue
             data[x] = (self.dims_space_time, self.dataset[x].values)
 
-        return FrequencyDirectionSpectrum(Dataset(data_vars=data, coords=coords))
+        return Spectrum2D(Dataset(data_vars=data, coords=coords))
 
 
-class GroupedFrequencySpectrum(FrequencySpectrum):
+class DrifterSpectrum(Spectrum1D):
     def __init__(self, dataset: Dataset):
         super().__init__(dataset)
         self._current_iteration = 0
@@ -362,9 +360,7 @@ class GroupedFrequencySpectrum(FrequencySpectrum):
             groups = np.unique(dataset["group_id"])
             self.dataset = self.dataset.assign_coords(groups=groups)
 
-    def __getitem__(
-        self: "GroupedFrequencySpectrum", item: str
-    ) -> "GroupedFrequencySpectrum":
+    def __getitem__(self: "DrifterSpectrum", item: str) -> "DrifterSpectrum":
         return self.isel(index=self.dataset["group_id"] == item)
 
     def __contains__(self, item: str):
@@ -394,8 +390,8 @@ class GroupedFrequencySpectrum(FrequencySpectrum):
 
     @classmethod
     def from_trajectory_dataset(
-        cls: "GroupedFrequencySpectrum", dataset: Dataset, mapping=None
-    ) -> "GroupedFrequencySpectrum":
+        cls: "DrifterSpectrum", dataset: Dataset, mapping=None
+    ) -> "DrifterSpectrum":
         """
         Create a spectrum object from a xarray trajectory dataset.
 

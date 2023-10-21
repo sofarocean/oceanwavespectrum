@@ -6,8 +6,8 @@ from linearwavetheory import (
     intrinsic_group_speed,
     intrinsic_phase_speed,
 )
-from roguewavespectrum.time import to_datetime64
-from roguewavespectrum.physical_constants import (
+from roguewavespectrum._time import to_datetime64
+from roguewavespectrum._physical_constants import (
     PHYSICSOPTIONS,
     PhysicsOptions,
     _as_physicsoptions_lwt,
@@ -44,7 +44,7 @@ _T = TypeVar("_T")
 _number_or_dataarray = TypeVar("_number_or_dataarray", DataArray, Number)
 
 
-class WaveSpectrum(ABC):
+class Spectrum(ABC):
     """
     Base class for wave spectra. This class provides the basic functionality for wave spectra, which is extended by
     the FrequencySpectrum and FrequencyDirectionSpectrum classes for either 1D or 2D spectra. This class should never
@@ -209,7 +209,7 @@ class WaveSpectrum(ABC):
 
         return self.__class__(dataset)
 
-    def flatten(self: "WaveSpectrum", flattened_coordinate="index") -> _T:
+    def flatten(self: "Spectrum", flattened_coordinate="index") -> _T:
         """
         Serialize the non-spectral dimensions creating a single leading dimension without a coordinate.
         """

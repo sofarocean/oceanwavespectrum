@@ -1,4 +1,10 @@
-from roguewavespectrum.spectrum import FrequencySpectrum, FrequencyDirectionSpectrum, WaveSpectrum
+"""
+Private module for now - will expose eventually - but it needs work. Basic idea is to provide some simple tooling to
+provide time series realizations from spectra. This is useful for testing and for generating synthetic data. May one
+day include second-order stuff we did in the nonlinear kinematics paper.
+"""
+
+from roguewavespectrum.spectrum import Spectrum1D, Spectrum2D, Spectrum
 from numpy.random import default_rng
 from numpy.fft import irfft
 from numpy import sqrt, cos, sin, pi, exp, sum, linspace
@@ -10,7 +16,7 @@ def surface_timeseries(
     component: Literal["u", "v", "w", "x", "y", "z"],
     sampling_frequency: float,
     signal_length: int,
-    spectrum: WaveSpectrum,
+    spectrum: Spectrum,
     seed: int = None,
 ) -> Tuple[NDArray, NDArray]:
     """
@@ -37,21 +43,19 @@ def surface_timeseries(
     return time, timeseries
 
 
-def create_fourier_amplitudes(
-    component, spectrum: WaveSpectrum, frequencies, seed=None
-):
+def create_fourier_amplitudes(component, spectrum: Spectrum, frequencies, seed=None):
     spectrum = spectrum.interpolate_frequency(frequencies)
 
-    if isinstance(spectrum, FrequencySpectrum):
+    if isinstance(spectrum, Spectrum1D):
         radian_directions = 0.0
         radian_frequency = spectrum.angular_frequency.values
         area = spectrum.frequency_binwidth.values
 
-    elif isinstance(spectrum, FrequencyDirectionSpectrum):
+    elif isinstance(spectrum, Spectrum2D):
         radian_directions = spectrum.radian_direction_mathematical.values[None, :]
         radian_frequency = spectrum.angular_frequency.values[:, None]
         area = (
-                spectrum.frequency_binwidth.values[:, None]
+            spectrum.frequency_binwidth.values[:, None]
             * spectrum.direction_step.values[None, :]
         )
     else:
@@ -78,7 +82,7 @@ def create_fourier_amplitudes(
     phases = default_rng(seed=seed).uniform(0, 2 * pi, spectrum.spectral_shape)
     amplitudes = sqrt(area * spectrum.values / 2) * exp(1j * phases) * factor
 
-    if isinstance(spectrum, FrequencyDirectionSpectrum):
+    if isinstance(spectrum, Spectrum2D):
         amplitudes = sum(amplitudes, axis=-1)
 
     return amplitudes

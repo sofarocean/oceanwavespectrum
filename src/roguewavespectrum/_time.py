@@ -17,7 +17,8 @@ from pandas import Series
 scalar_input_types = Union[str, float, int, datetime, datetime64]
 input_types = Union[scalar_input_types, Sequence[scalar_input_types]]
 
-nat = datetime64('NaT').astype('<M8[ns]')
+nat = datetime64("NaT").astype("<M8[ns]")
+
 
 def to_datetime_utc(time: input_types) -> Union[datetime, Sequence[datetime], None]:
     """
@@ -56,9 +57,7 @@ def to_datetime_utc(time: input_types) -> Union[datetime, Sequence[datetime], No
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
 
-                return dt.astimezone(
-                    timezone.utc
-                )
+                return dt.astimezone(timezone.utc)
             except ValueError:
                 return datetime.strptime(time, "%Y-%m-%dT%H:%M:%S.%f%z").astimezone(
                     timezone.utc
@@ -86,12 +85,17 @@ def to_datetime64(time) -> Union[None, datetime64, NDArray[datetime64]]:
     if time is None:
         return None
 
+    if isinstance(time, datetime64):
+        return time
+
     # Convert to a (sequence of) UTC datetime(s)
     time = to_datetime_utc(time)
 
     if isinstance(time, datetime):
         # If a datetime- do conversion
-        return datetime64(int(time.timestamp()), "s").astype('<M8[ns]')
+        return datetime64(int(time.timestamp()), "s").astype("<M8[ns]")
     else:
         # if  a sequence, do list comprehension and return an array
-        return array([datetime64(int(x.timestamp()), "s").astype('<M8[ns]') for x in time])
+        return array(
+            [datetime64(int(x.timestamp()), "s").astype("<M8[ns]") for x in time]
+        )
