@@ -16,6 +16,7 @@ setuptools.setup(
         "scipy",
         "numba-progress",
         "pandas",
+        "pdoc",
     ],
     extras_require={
         "full": [
