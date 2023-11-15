@@ -1,8 +1,8 @@
 import numpy
 import numpy as np
 
-from .spectrum import Spectrum
-from roguewavespectrum.estimators.estimate import (
+from ._spectrum import Spectrum
+from roguewavespectrum._estimators.estimate import (
     estimate_directional_spectrum_from_moments,
     Estimators,
 )
@@ -10,8 +10,8 @@ from roguewavespectrum._time import to_datetime64
 from roguewavespectrum._physical_constants import PhysicsOptions
 from typing import TypeVar, Literal
 from xarray import Dataset, DataArray, zeros_like, ones_like, concat
-from .spline_interpolation import cumulative_frequency_interpolation_1d_variable
-from .variable_names import (
+from ._spline_interpolation import cumulative_frequency_interpolation_1d_variable
+from ._variable_names import (
     NAME_F,
     NAME_D,
     NAME_E,
@@ -23,8 +23,8 @@ from .variable_names import (
     SPECTRAL_VARS,
     set_conventions,
 )
-from .wavespectrum2D import Spectrum2D
-from .extrapolate import numba_fill_zeros_or_nan_in_tail
+from ._wavespectrum2D import Spectrum2D
+from ._extrapolate import numba_fill_zeros_or_nan_in_tail
 
 _T = TypeVar("_T")
 
@@ -50,15 +50,6 @@ class Spectrum1D(Spectrum):
     @_spectrum.setter
     def _spectrum(self, value):
         self.dataset[NAME_e] = value
-
-    @property
-    def variance_density(self) -> DataArray:
-        """
-        Variance density data array.
-
-        :return: Variance density [m^2/Hz or m^2/Hz/deg] depending on the type of spectrum.
-        """
-        return self._spectrum
 
     def interpolate_frequency(
         self: "Spectrum1D",
@@ -271,7 +262,7 @@ class Spectrum1D(Spectrum):
         return Spectrum1D(dataset)
 
     def downsample(self, frequencies) -> "Spectrum1D":
-        cdf = self.cumulative_density_function()
+        cdf = self.cumulative_density_function
         diff = numpy.diff(
             frequencies,
             append=2 * frequencies[-1] - frequencies[-2],

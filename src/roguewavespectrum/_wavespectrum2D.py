@@ -4,7 +4,7 @@ from xarray import (
     Dataset,
     DataArray,
 )
-from .spectrum import Spectrum
+from ._spectrum import Spectrum
 from roguewavespectrum._physical_constants import PhysicsOptions
 from ._directions import (
     DirectionalConvention,
@@ -16,7 +16,7 @@ from ._directions import (
 
 _T = TypeVar("_T")
 
-from .variable_names import (
+from ._variable_names import (
     NAME_D,
     NAME_E,
     NAME_e,
@@ -100,10 +100,6 @@ class Spectrum2D(Spectrum):
 
     def _directionally_integrate(self, data_array: DataArray) -> DataArray:
         return (data_array * self.direction_step).sum(NAME_D, skipna=True)
-
-    @property
-    def variance_density(self) -> DataArray:
-        return self.e
 
     @property
     def directional_variance_density(self) -> DataArray:
@@ -211,7 +207,7 @@ class Spectrum2D(Spectrum):
 
 
 def _circular_dependency_workaround(spectrum: Spectrum2D):
-    from .wavespectrum1D import Spectrum1D
+    from ._wavespectrum1D import Spectrum1D
 
     dataset = {
         "a1": spectrum.a1,

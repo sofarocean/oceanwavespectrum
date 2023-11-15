@@ -8,7 +8,7 @@ import numpy
 from roguewavespectrum import concatenate_spectra, Spectrum2D
 from datetime import datetime, timezone
 from numpy.testing import assert_allclose
-from roguewavespectrum.estimators import (
+from roguewavespectrum._estimators import (
     _mem2_newton_solver,
     _initial_value,
     _moment_constraints,

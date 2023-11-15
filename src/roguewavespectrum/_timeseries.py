@@ -4,7 +4,7 @@ provide time series realizations from spectra. This is useful for testing and fo
 day include second-order stuff we did in the nonlinear kinematics paper.
 """
 
-from roguewavespectrum.spectrum import Spectrum1D, Spectrum2D, Spectrum
+from roguewavespectrum import Spectrum1D, Spectrum2D, Spectrum
 from numpy.random import default_rng
 from numpy.fft import irfft
 from numpy import sqrt, cos, sin, pi, exp, sum, linspace

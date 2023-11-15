@@ -46,7 +46,7 @@ def test_create_parametric_spectrum():
 
     spectrum = parametric_directional_spectrum(frequency, angles, freq_shape, dir_shape)
 
-    assert_allclose(spectrum.significant_waveheight.values, 2, rtol=0.001, atol=0.001)
+    assert_allclose(spectrum.hm0().values, 2, rtol=0.001, atol=0.001)
     assert_allclose(spectrum.peak_frequency().values, 0.1, rtol=0.001, atol=0.001)
     assert_allclose(spectrum.mean_direction().values, 20, rtol=0.001, atol=0.001)
 

@@ -1,5 +1,5 @@
 import numpy as np
-from .variable_names import set_conventions
+from ._variable_names import set_conventions
 from typing import TypeVar, Literal
 
 _T = TypeVar("_T")

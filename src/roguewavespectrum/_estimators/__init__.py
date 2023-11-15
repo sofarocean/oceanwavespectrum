@@ -1,5 +1,5 @@
 """
-Spectral estimators
+Spectral _estimators
 ======================
 This package contains methods that can be used to create a 2D spectrum from Fourier moments. Specifically, it contains
 methods to construct a frequency direction spectrum given the first and second directional Fourier moments

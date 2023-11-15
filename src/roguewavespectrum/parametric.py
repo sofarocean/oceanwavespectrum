@@ -85,14 +85,14 @@ References
 """
 
 
-from .spectrum import Spectrum2D, Spectrum1D
+from roguewavespectrum import Spectrum2D, Spectrum1D
 from abc import ABC, abstractmethod
 from scipy.special import gamma
 import numpy
 from ._time import to_datetime64
 from xarray import Dataset
 from ._physical_constants import GRAVITATIONAL_ACCELERATION
-from .spectrum.variable_names import (
+from ._variable_names import (
     NAME_F,
     NAME_D,
     NAME_E,

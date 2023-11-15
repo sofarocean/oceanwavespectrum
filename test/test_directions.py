@@ -1,6 +1,4 @@
-from roguewavespectrum.spectrum._directions import (
-    wave_directional_spread,
-    wave_mean_direction,
+from roguewavespectrum._directions import (
     convert_unit,
     convert_angle_convention,
 )

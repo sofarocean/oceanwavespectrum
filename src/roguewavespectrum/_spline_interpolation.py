@@ -15,14 +15,14 @@ Functions:
 import numpy as np
 from scipy.interpolate import CubicSpline
 from xarray import Dataset, DataArray
-from .variable_names import SPECTRAL_VARS, NAME_F, SPECTRAL_MOMENTS, NAME_e
+from ._variable_names import SPECTRAL_VARS, NAME_F, SPECTRAL_MOMENTS, NAME_e
 
 
 def cubic_spline(
-        x: np.ndarray,
-        y: np.ndarray,
-        monotone_interpolation: bool = False,
-        frequency_axis=-1,
+    x: np.ndarray,
+    y: np.ndarray,
+    monotone_interpolation: bool = False,
+    frequency_axis=-1,
 ) -> CubicSpline:
     """
     Construct a cubic spline, optionally monotone.
@@ -111,7 +111,7 @@ def monotone_cubic_spline_coeficients(x: np.ndarray, Y: np.ndarray) -> np.ndarra
 
 
 def _monotone_cubic_spline(
-        x: np.ndarray, y: np.ndarray, spline_coeficients=None
+    x: np.ndarray, y: np.ndarray, spline_coeficients=None
 ) -> np.ndarray:
     """
     Find a monotone cubic spline function that is maximally smooth. The basic idea is that instead of the traditional
@@ -206,9 +206,9 @@ def _monotone_cubic_spline(
     # these are the coeficients that represent the linear equations for C0, C1 and C2 continuity at spline edges.
     d2y_dx2_coef = np.concatenate((6 * delta_x, twos, zeros, zeros, -twos), axis=1)
     dy_dx_coef = np.concatenate(
-        (3 * delta_x ** 2, 2 * delta_x, ones, zeros, zeros, -ones), axis=1
+        (3 * delta_x**2, 2 * delta_x, ones, zeros, zeros, -ones), axis=1
     )
-    y_coef = np.concatenate((delta_x ** 3, delta_x ** 2, delta_x), axis=1)
+    y_coef = np.concatenate((delta_x**3, delta_x**2, delta_x), axis=1)
 
     # Create Matrices
     # -----------------
@@ -229,18 +229,18 @@ def _monotone_cubic_spline(
         jrow = ii * 3 + 1
 
         # d2y/dx2 continuity at spline edges. Note technically this is the only equation we minimize
-        least_squares_matrix[jrow, jcol: jcol + 5] = (
-                d2y_dx2_coef[ii, :] / max_curvature * weights[0]
+        least_squares_matrix[jrow, jcol : jcol + 5] = (
+            d2y_dx2_coef[ii, :] / max_curvature * weights[0]
         )
 
         # dy/dx continuity at spline edges
-        least_squares_matrix[jrow + 1, jcol: jcol + 6] = (
-                dy_dx_coef[ii, :] / max_secant * weights[1]
+        least_squares_matrix[jrow + 1, jcol : jcol + 6] = (
+            dy_dx_coef[ii, :] / max_secant * weights[1]
         )
 
         # y continuity at spline edges
-        least_squares_matrix[jrow + 2, jcol: jcol + 3] = (
-                y_coef[ii, :] / max_delta * weights[2]
+        least_squares_matrix[jrow + 2, jcol : jcol + 3] = (
+            y_coef[ii, :] / max_delta * weights[2]
         )
         least_squares_rhs[jrow + 2] = delta_y[ii] / max_delta * weights[2]
 
@@ -252,18 +252,18 @@ def _monotone_cubic_spline(
             # Note we skip this constraint if we are at a peak in the data- or if one of the surrounding secants is 0.
             # Enforcing 0.0 slope (the other posibility in this case) can lead to a system of equations that is not
             # solvable.
-            equality_constraint_matrix[jrow, jcol: jcol + 6] = dy_dx_coef[ii, :]
+            equality_constraint_matrix[jrow, jcol : jcol + 6] = dy_dx_coef[ii, :]
         else:
-            equality_constraint_matrix[jrow, jcol: jcol + 3] = dy_dx_coef[ii, :3]
+            equality_constraint_matrix[jrow, jcol : jcol + 3] = dy_dx_coef[ii, :3]
 
-        equality_constraint_matrix[jrow + 1, jcol: jcol + 3] = y_coef[ii, :]
+        equality_constraint_matrix[jrow + 1, jcol : jcol + 3] = y_coef[ii, :]
         equality_constraint_rhs[jrow + 1] = delta_y[ii]
 
     # Add the end node values for the final spline
     equality_constraint_matrix[-1, -3:] = y_coef[-1, :]
     equality_constraint_rhs[-1] = delta_y[-1]
 
-    least_squares_matrix[-2, number_of_splines * 3 - 3:] = y_coef[-1, :] / max_delta
+    least_squares_matrix[-2, number_of_splines * 3 - 3 :] = y_coef[-1, :] / max_delta
     least_squares_rhs[-2] = delta_y[-1] / max_delta
 
     # Build the matrix for the inequality constraints. These constraints enfore monotone behaviour of each spline.
@@ -302,24 +302,24 @@ def _monotone_cubic_spline(
 
         if check:
             # dy/dx at the end of the spline must be smaller than 3 times the secant
-            inequality_constraint_matrix[jrow + 1, jcol: jcol + 3] = (
-                    sign * dy_dx_coef[ii, :3]
+            inequality_constraint_matrix[jrow + 1, jcol : jcol + 3] = (
+                sign * dy_dx_coef[ii, :3]
             )
             inequality_constraint_rhs[jrow + 1] = 3 * secant[ii]
 
             # dy/dx at the end of the spline must be larger than 0
-            inequality_constraint_matrix[jrow + 3, jcol: jcol + 3] = (
-                    -sign * dy_dx_coef[ii, :3]
+            inequality_constraint_matrix[jrow + 3, jcol : jcol + 3] = (
+                -sign * dy_dx_coef[ii, :3]
             )
             inequality_constraint_rhs[jrow + 3] = eps
         else:
             # secants change sign across node - slope must be zero-> slope <= 0  & -slope <=0
-            inequality_constraint_matrix[jrow + 1, jcol: jcol + 3] = dy_dx_coef[ii, :3]
+            inequality_constraint_matrix[jrow + 1, jcol : jcol + 3] = dy_dx_coef[ii, :3]
             inequality_constraint_rhs[jrow + 1] = eps
 
-            inequality_constraint_matrix[jrow + 3, jcol: jcol + 3] = -dy_dx_coef[
-                                                                      ii, :3
-                                                                      ]
+            inequality_constraint_matrix[jrow + 3, jcol : jcol + 3] = -dy_dx_coef[
+                ii, :3
+            ]
             inequality_constraint_rhs[jrow + 3] = eps
 
     # Solve system and return results
@@ -375,11 +375,11 @@ def _monotone_cubic_spline(
 
 
 def _cdf_interpolate_spline(
-        frequency: np.ndarray,
-        frequency_spectrum: np.ndarray,
-        monotone_interpolation: bool = False,
-        frequency_axis=-1,
-        **kwargs
+    frequency: np.ndarray,
+    frequency_spectrum: np.ndarray,
+    monotone_interpolation: bool = False,
+    frequency_axis=-1,
+    **kwargs
 ) -> CubicSpline:
     """
     Interpolate the spectrum using the cdf.
@@ -403,13 +403,13 @@ def _cdf_interpolate_spline(
     #
     diff = np.diff(
         frequency,
-        append= 2 * frequency[-1] - frequency[-2],
-        prepend= 2 * frequency[0] - frequency[1]
+        append=2 * frequency[-1] - frequency[-2],
+        prepend=2 * frequency[0] - frequency[1],
     )
     frequency_step = diff[0:-1] * 0.5 + diff[1:] * 0.5
     integration_frequencies = np.concatenate(([0], np.cumsum(frequency_step)))
     integration_frequencies = (
-            integration_frequencies - frequency_step[0] / 2 + frequency[0]
+        integration_frequencies - frequency_step[0] / 2 + frequency[0]
     )
 
     cumsum = np.cumsum(frequency_spectrum * frequency_step, axis=frequency_axis)
@@ -425,10 +425,10 @@ def _cdf_interpolate_spline(
 
 
 def spline_peak_frequency(
-        frequency: np.ndarray,
-        frequency_spectrum: np.ndarray,
-        frequency_axis=-1,
-        monotone_interpolation=True,
+    frequency: np.ndarray,
+    frequency_spectrum: np.ndarray,
+    frequency_axis=-1,
+    monotone_interpolation=True,
 ) -> np.ndarray:
     """
     Estimate the peak frequency of the spectrum based on a cubic spline interpolation of the partially integrated
@@ -477,7 +477,7 @@ def spline_peak_frequency(
 
 
 def cumulative_frequency_interpolation_1d_variable(
-        interpolation_frequency, dataset: Dataset, **kwargs
+    interpolation_frequency, dataset: Dataset, **kwargs
 ):
     """
     To interpolate the spectrum we first calculate a cumulative density function from the spectrum (which is essentialy
@@ -535,7 +535,7 @@ def cumulative_frequency_interpolation_1d_variable(
         )
         # Avoid division by zero
         interpolated_densities[msk] = (
-                interpolated_densities[msk] / interpolated_energy[msk]
+            interpolated_densities[msk] / interpolated_energy[msk]
         )
 
         _dataset = _dataset.assign(

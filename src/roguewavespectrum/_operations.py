@@ -1,9 +1,9 @@
-from .spectrum import Spectrum
-from .variable_names import SPECTRAL_VARS
-from .wavespectrum1D import Spectrum1D
+from ._spectrum import Spectrum
+from ._variable_names import SPECTRAL_VARS
+from ._wavespectrum1D import Spectrum1D
 from typing import Sequence
 from xarray import concat, Dataset, DataArray
-from .extrapolate import numba_fill_zeros_or_nan_in_tail
+from ._extrapolate import numba_fill_zeros_or_nan_in_tail
 
 
 def concatenate_spectra(spectra: Sequence[Spectrum], dim=None, **kwargs) -> Spectrum:

@@ -134,8 +134,8 @@ def test_concatenate():
         "frequency",
         "direction",
     ]
-    assert spectrum.significant_waveheight.dims[0] == "latitude"
-    assert_allclose(spectrum.significant_waveheight[-1], 4, 1e-3, 1e-3)
+    assert spectrum.hm0().dims[0] == "latitude"
+    assert_allclose(spectrum.hm0()[-1], 4, 1e-3, 1e-3)
 
     spectrum = [
         concatenate_spectra(spectra, dim="time"),
@@ -175,8 +175,8 @@ def test_concatenate_1d():
     spectrum = concatenate_spectra(spectra, dim="latitude")
     assert spectrum.variance_density.shape[0] == N
     assert list(spectrum.variance_density.dims) == ["latitude", "frequency"]
-    assert spectrum.significant_waveheight.dims[0] == "latitude"
-    assert_allclose(spectrum.significant_waveheight[-1], 4, 1e-3, 1e-3)
+    assert spectrum.hm0().dims[0] == "latitude"
+    assert_allclose(spectrum.hm0()[-1], 4, 1e-3, 1e-3)
 
 
 def test_save_and_load():
@@ -234,8 +234,8 @@ def test_spectrum2d():
             assert spec2d.dims_spectral == ["frequency", "direction"]
             assert spec2d.dims == ["time", "frequency", "direction"]
             assert_allclose(
-                spec2d.significant_waveheight,
-                spec1d.significant_waveheight,
+                spec2d.hm0(),
+                spec1d.hm0(),
                 rtol=1e-4,
                 atol=1e-4,
             )
@@ -486,7 +486,7 @@ def test_mean_direction_per_frequency():
     dir_per_freq[:, 0:2] = nan
     for spec in specs:
         helper_assert(
-            spec.mean_direction_per_frequency(),
+            spec.mean_direction_per_frequency,
             ["time", "frequency"],
             (4, 100),
             dir_per_freq,
@@ -499,7 +499,7 @@ def test_mean_spread_per_frequency():
     spread_per_freq[:, 0:2] = nan
     for spec in specs:
         helper_assert(
-            spec.mean_spread_per_frequency(),
+            spec.mean_spread_per_frequency,
             ["time", "frequency"],
             (4, 100),
             spread_per_freq,
@@ -605,26 +605,14 @@ def test_peak_wavenumber():
     for spec in specs:
         ipeak = spec.peak_index()
         peak_wavenumber = spec.wavenumber[:, ipeak].values
-        helper_assert(spec.peak_wavenumber, ["time"], (4,), peak_wavenumber)
+        helper_assert(spec.peak_wavenumber(), ["time"], (4,), peak_wavenumber)
 
 
 def test_significant_waveheight():
     specs = helper_create_spectra(4)
     for spec in specs:
         hm0 = spec.hm0().values
-        helper_assert(spec.significant_waveheight, ["time"], (4,), hm0)
-
-
-def test_mean_period():
-    specs = helper_create_spectra(4)
-    for spec in specs:
-        helper_assert(spec.mean_period, ["time"], (4,), spec.tm01().values)
-
-
-def test_zero_crossing_period():
-    specs = helper_create_spectra(4)
-    for spec in specs:
-        helper_assert(spec.zero_crossing_period, ["time"], (4,), spec.tm02().values)
+        helper_assert(spec.hm0(), ["time"], (4,), hm0)
 
 
 def test_interpolate():
