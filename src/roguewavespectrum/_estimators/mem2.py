@@ -144,7 +144,7 @@ def _mem2_scipy_root_finder(
     b1: typing.Union[np.ndarray, float],
     a2: typing.Union[np.ndarray, float],
     b2: typing.Union[np.ndarray, float],
-    progress,
+    progress_bar,
     **kwargs
 ) -> np.ndarray:
     """
@@ -194,7 +194,9 @@ def _mem2_scipy_root_finder(
 
     guess = _initial_value(a1, b1, a2, b2)
     for ipoint in range(0, number_of_points):
-        progress.update(1)
+        if progress_bar is not None:
+            progress_bar.update(1)
+
         for ifreq in range(0, number_of_frequencies):
             #
             moments = np.array(
@@ -476,6 +478,10 @@ def _mem2_newton_solver(
             else:
                 # The update may be too big as we are not decreasing the cost function magnitude. We will decrease the
                 # step size we take - but keep the direction of the step the same.
+                if magnitude_update == 0.0:
+                    # We are stuck at a stationary point. We are done.
+                    convergence = False
+                    break
                 inverse_relative_update = magnitude_current_iterate / magnitude_update
                 line_search_factor = min(
                     inverse_relative_update, line_search_factor / 2
