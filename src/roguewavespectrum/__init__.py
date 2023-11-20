@@ -83,4 +83,5 @@ Spectrum2D = _Spectrum2D
 DrifterSpectrum = _DrifterSpectrum
 
 from ._operations import concatenate_spectra
+from ._factory_methods import create_spectrum_1d
 import roguewavespectrum.parametric as parametric
