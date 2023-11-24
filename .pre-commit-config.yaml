@@ -10,17 +10,12 @@ repos:
         args: [--maxkb=1024]
       - id: check-merge-conflict
       - id: debug-statements
-#  - repo: https://gitlab.com/pycqa/flake8
-#    rev: 4.0.1
-#    hooks:
-#      - id: flake8
-#        #args: []
   - repo: https://github.com/psf/black
     rev: 22.3.0
     hooks:
       - id: black
-#  - repo: https://github.com/pycqa/isort
-#    rev: 5.6.4
-#    hooks:
-#      - id: isort
-#        args: ["--profile", "black", "--filter-files"]
+  # checker
+  -   repo: https://github.com/pycqa/flake8
+      rev: 3.8.4
+      hooks:
+      - id: flake8

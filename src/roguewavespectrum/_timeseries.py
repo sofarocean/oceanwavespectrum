@@ -1,7 +1,8 @@
 """
-Private module for now - will expose eventually - but it needs work. Basic idea is to provide some simple tooling to
-provide time series realizations from spectra. This is useful for testing and for generating synthetic data. May one
-day include second-order stuff we did in the nonlinear kinematics paper.
+Private module for now - may expose eventually - but it needs work, and I feel this may better be handled in some
+dependant package. Basic idea is to provide some simple tooling t provide time series realizations from spectra.
+This is useful for testing and for generating synthetic data. May one day include second-order stuff we did in the
+nonlinear kinematics paper.
 """
 
 from roguewavespectrum import Spectrum1D, Spectrum2D, Spectrum

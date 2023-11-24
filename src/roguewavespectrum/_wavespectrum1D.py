@@ -21,7 +21,6 @@ from ._variable_names import (
     NAME_b2,
     NAME_e,
     SPECTRAL_VARS,
-    set_conventions,
 )
 from ._wavespectrum2D import Spectrum2D
 from ._extrapolate import numba_fill_zeros_or_nan_in_tail
@@ -261,7 +260,16 @@ class Spectrum1D(Spectrum):
 
         return Spectrum1D(dataset)
 
-    def downsample(self, frequencies) -> "Spectrum1D":
+    def downsample(self, frequencies: np.ndarray) -> "Spectrum1D":
+        """
+        Downsample the spectrum to the given frequencies. To downsample the spectrum we first calculate the cumulative
+        density function and then sample the cumulative density function at the given frequencies. This ensures that
+        the downsampled spectrum has equal energy within equal frequency intervals. For the directional moments we
+        simply sample the moments at the nearest frequency.
+
+        :param frequencies: ordered array of frequencies to downsample to.
+        :return: Downsampled spectrum
+        """
         cdf = self.cumulative_density_function
         diff = numpy.diff(
             frequencies,
@@ -313,6 +321,37 @@ class Spectrum1D(Spectrum):
         method: Estimators = "mem2",
         solution_method="scipy",
     ) -> "Spectrum2D":
+        """
+        Construct a 2D directional energy spectrum based on the directional moments and a specified spectral
+        reconstruction method.
+
+        :param number_of_directions: number of directions to use in the reconstruction. The directions are given by
+        np.linspace(0,360,number_of_directions,endpoint=False)
+
+        :param method: Choose a method in ['mem','mem2']
+            mem: maximum entrophy (in the Boltzmann sense) method
+            Lygre, A., & Krogstad, H. E. (1986). Explicit expression and
+            fast but tends to create narrow spectra anderroneous secondary peaks.
+
+            mem2: use entrophy (in the Shannon sense) to maximize. Likely
+            best method see- Benoit, M. (1993).
+
+        :param solution_method: Only relevant for MeM2. Choose a solution method in ['scipy','newton'] This determines
+            if we solve the nonlinear set of equations using scipy or a custom numba implemented newton-root finder.
+            The newton solver is faster but may be less robust. For details we refer to comments in the code itself.
+
+        :return: Spectrum2D object
+
+        REFERENCES:
+        Benoit, M. (1993). Practical comparative performance survey of methods
+            used for estimating directional wave spectra from heave-pitch-roll data.
+            In Coastal Engineering 1992 (pp. 62-75).
+
+        Lygre, A., & Krogstad, H. E. (1986). Maximum entropy estimation of the
+            directional distribution in ocean wave spectra.
+            Journal of Physical Oceanography, 16(12), 2052-2060.
+
+        """
 
         direction = numpy.linspace(0, 360, number_of_directions, endpoint=False)
 
@@ -327,7 +366,7 @@ class Spectrum1D(Spectrum):
             solution_method=solution_method,
         )
 
-        dims = self.dims_space_time + [NAME_F, NAME_D]
+        dims = list(self.dims_space_time) + [NAME_F, NAME_D]
         coords = {x: self.dataset[x].values for x in self.dims}
         coords[NAME_D] = direction
 
@@ -339,74 +378,29 @@ class Spectrum1D(Spectrum):
 
         return Spectrum2D(Dataset(data_vars=data, coords=coords))
 
-
-class DrifterSpectrum(Spectrum1D):
-    def __init__(self, dataset: Dataset):
-        super().__init__(dataset)
-        self._current_iteration = 0
-        if "group_id" not in dataset:
-            raise ValueError("GroupFrequencySpectrum requires group_id ")
-
-        if "groups" not in dataset.coords:
-            groups = np.unique(dataset["group_id"])
-            self.dataset = self.dataset.assign_coords(groups=groups)
-
-    def __getitem__(self: "DrifterSpectrum", item: str) -> "DrifterSpectrum":
-        return self.isel(index=self.dataset["group_id"] == item)
-
-    def __contains__(self, item: str):
-        return item in self.keys()
-
-    def __len__(self) -> int:
-        return len(self.dataset["groups"].values)
-
-    def __iter__(self):
-        self._current_iteration = 0
-        return self
-
-    def __next__(self):
-        if self._current_iteration < len(self):
-            result = self[self._current_iteration]
-            self._current_iteration += 1
-            return result
-        else:
-            raise StopIteration
-
-    def keys(self):
-        return self.dataset["groups"].values
-
-    @property
-    def trajectory_ids(self):
-        return self.keys()
-
     @classmethod
-    def from_trajectory_dataset(
-        cls: "DrifterSpectrum", dataset: Dataset, mapping=None
-    ) -> "DrifterSpectrum":
+    def from_dataset(cls: _T, dataset: Dataset, mapping=None, deep=False) -> _T:
         """
-        Create a spectrum object from a xarray trajectory dataset.
+        Create a spectrum object from a xarray dataset. The dataset must either contain
+        - the variables: "variance_density", "a1", "b1", "a2", "b2"
+        - coordinates: "frequency",
+
+        or a mapping must be provided that maps the dataset names to expected variable/coordinat names. Coordinate units
+        are  assumed to be Hz (frequency>=0). Units of the spectrum are assumed to be
+        m^2/Hz. The default interpretation of the direction is mathematical (90 degrees is North), and direction
+        indicates the direction the waves are going towards, and it is assumed directional moments are consistent with
+        this interpretation.
+
+        Note that by default we create a shallow copy of the dataset.
 
         :param dataset: xarray dataset
-        :param mapping: dictionary mapping the xarray dataset names to the spectrum names.
-        :return: Spectrum object
+        :param mapping: dictionary mapping the xarray dataset names to the spectrum names
+        :param deep: If True, create a deep copy of the input dataset.
+
+        :return: Spectrum1D object
         """
+        dataset = dataset.copy(deep=deep)
         if mapping is not None:
-            dataset = dataset.copy(deep=False).rename(mapping)
-
-        if "trajectory" in dataset:
-            trajectory = dataset["trajectory"].values
-            rowsizes = dataset["rowsize"].values
-            labels = []
-            for ordinal_index, rowsize in enumerate(rowsizes):
-                labels += rowsize * [trajectory[ordinal_index]]
-
-            dataset = dataset.assign({"group_id": ("index", labels)})
-            dataset = dataset.drop_vars(["trajectory", "rowsize"])
-
-        else:
-            raise ValueError(
-                "creating GroupedFrequencySpectrum from a trajectory dataset requires trajectory "
-                "information"
-            )
+            dataset = dataset.rename(mapping)
 
         return cls(dataset)

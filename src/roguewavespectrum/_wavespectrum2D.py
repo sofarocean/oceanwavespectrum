@@ -14,8 +14,6 @@ from ._directions import (
     get_angle_convention_and_unit,
 )
 
-_T = TypeVar("_T")
-
 from ._variable_names import (
     NAME_D,
     NAME_E,
@@ -29,6 +27,8 @@ from ._variable_names import (
     SPECTRAL_VARS,
     set_conventions,
 )
+
+_T = TypeVar("_T")
 
 
 class Spectrum2D(Spectrum):
@@ -175,6 +175,11 @@ class Spectrum2D(Spectrum):
         return angle
 
     def as_frequency_spectrum(self):
+        """
+        Return a 1D spectrum by integrating over the directions and return a Spectrum1D object. This will also include
+        the a1,b1,a2,b2 moments as estimated from the 2D spectrum.
+        :return: Spectrum1D object
+        """
         return _circular_dependency_workaround(self)
 
     @property
@@ -204,6 +209,31 @@ class Spectrum2D(Spectrum):
         )
         data_array = data_array.assign_coords({NAME_K: wavenumber})
         return data_array
+
+    @classmethod
+    def from_dataset(cls: _T, dataset: Dataset, mapping=None, deep=False) -> _T:
+        """
+        Create a spectrum object from a xarray dataset. The dataset must either contain
+        - the variable: "directional_variance_density"
+        - coordinates: "frequency", "direction"
+
+        or a mapping must be provided that maps the dataset names to expected variable/coordinat names. Coordinate Units
+        are  assumed to be degrees [0,360), and Hz (frequency>=0). Units of the spectrum are assumed to be
+        m^2/Hz/degree. The default interpretation of the direction is mathematical (90 degrees is North), and direction
+        indicates the direction the waves are going towards.
+
+        Note that by default we create a shallow copy of the dataset.
+
+        :param dataset: xarray dataset.
+        :param mapping: dictionary mapping the xarray dataset names to the spectrum names.
+        :param deep: If True, create a deep copy of the input dataset.
+        :return: Spectrum object
+        """
+        dataset = dataset.copy(deep=deep)
+        if mapping is not None:
+            dataset = dataset.rename(mapping)
+
+        return cls(dataset)
 
 
 def _circular_dependency_workaround(spectrum: Spectrum2D):

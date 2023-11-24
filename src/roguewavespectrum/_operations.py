@@ -1,12 +1,15 @@
 from ._spectrum import Spectrum
 from ._variable_names import SPECTRAL_VARS
 from ._wavespectrum1D import Spectrum1D
-from typing import Sequence
+from ._wavespectrum2D import Spectrum2D
+from typing import Sequence, TypeVar
 from xarray import concat, Dataset, DataArray
 from ._extrapolate import numba_fill_zeros_or_nan_in_tail
 
+_T = TypeVar("_T", Spectrum2D, Spectrum1D)
 
-def concatenate_spectra(spectra: Sequence[Spectrum], dim=None, **kwargs) -> Spectrum:
+
+def concatenate_spectra(spectra: Sequence[_T], dim=None, **kwargs) -> _T:
     """
     Concatenate along the given dimension. If the dimension does not exist a new dimension will be created. Under the
     hood this calls the concat function of xarray. Named arguments to that function can be applied here as well.

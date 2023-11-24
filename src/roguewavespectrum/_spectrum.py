@@ -14,7 +14,7 @@ from roguewavespectrum._physical_constants import (
 )
 from abc import ABC, abstractmethod
 
-from typing import TypeVar, List, Mapping
+from typing import TypeVar, List, Mapping, Tuple
 from xarray import Dataset, DataArray, concat, where, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
@@ -84,6 +84,12 @@ class Spectrum(ABC):
             except KeyError:
                 continue
 
+        # initialize labels
+        if "ids" in self.dataset:
+            if "unique_ids" not in dataset.coords:
+                ids = np.unique(dataset["unique_ids"])
+                self.dataset = self.dataset.assign_coords(unique_ids=ids)
+
     # Dunder methods
     # -----------------
     def __copy__(self: _T) -> _T:
@@ -104,6 +110,10 @@ class Spectrum(ABC):
     @abstractmethod
     def _spectrum(self, value) -> DataArray:
         ...
+
+    @property
+    def _has_identifiers(self) -> bool:
+        return "identifier" in self.dataset
 
     # Operations
     # ------------
@@ -187,7 +197,7 @@ class Spectrum(ABC):
         # Calculate the flattened shape
         new_shape = (length,)
         new_spectral_shape = (length, *self.spectral_shape)
-        new_dims = [flattened_coordinate] + self.dims_spectral
+        new_dims = [flattened_coordinate] + list(self.dims_spectral)
 
         linear_index = DataArray(data=np.arange(0, length), dims=flattened_coordinate)
         indices = np.unravel_index(linear_index.values, shape)
@@ -297,6 +307,26 @@ class Spectrum(ABC):
             dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
         return self.__class__(dataset=dataset)
 
+    def sel_by_id(self: _T, item: str) -> _T:
+        """
+        Select spectra by identifier.
+        :param item: identifier of the spectra to select.
+        :return: Spectrum object with the selected spectra.
+        """
+        if self._has_identifiers:
+            return self.isel(index=self.dataset["ids"] == item)
+        else:
+            raise ValueError(
+                "To select spectra by ID the dataset must have IDs specified upon creation"
+            )
+
+    @property
+    def ids(self) -> List[str]:
+        if self._has_identifiers:
+            return list(self.dataset["unique_ids"].values)
+        else:
+            raise ValueError("This dataset has no identifiers associated with spectra")
+
     def where(self: _T, condition: DataArray) -> _T:
         """
         Apply a boolean mask to the dataset.
@@ -356,22 +386,22 @@ class Spectrum(ABC):
         return {dim: self.dataset[dim] for dim in self.dims_spectral}
 
     @property
-    def dims(self) -> List[str]:
+    def dims(self) -> Tuple[str]:
         """
-        Return a list of the dimensions of the variance density spectrum.
+        Return a tuple of the dimensions of the variance density spectrum.
 
         :return: list[str] with names of dimensions.
         """
-        return [str(x) for x in self._spectrum.dims]
+        return tuple(str(x) for x in self._spectrum.dims)
 
     @property
-    def dims_space_time(self) -> List[str]:
+    def dims_space_time(self) -> Tuple[str]:
         """
-        Return a list of the spatial and temporal dimensions of the variance density spectrum.
+        Return a tuple of the spatial and temporal dimensions of the variance density spectrum.
 
         :return: list[str] with names of spatial and temporal dimensions.
         """
-        return [str(x) for x in self._spectrum.dims if x not in SPECTRAL_DIMS]
+        return tuple(str(x) for x in self._spectrum.dims if x not in SPECTRAL_DIMS)
 
     @property
     def depth(self) -> DataArray:
@@ -400,13 +430,13 @@ class Spectrum(ABC):
         return set_conventions(data_array, NAME_DEPTH, overwrite=True)
 
     @property
-    def dims_spectral(self) -> List[str]:
+    def dims_spectral(self) -> Tuple[str]:
         """
-        Return a list of the spectral dimensions of the variance density spectrum.
+        Return a tuple of the spectral dimensions of the variance density spectrum.
 
         :return: list[str] with names of spectral dimensions.
         """
-        return [str(x) for x in self._spectrum.dims if x in SPECTRAL_DIMS]
+        return tuple(str(x) for x in self._spectrum.dims if x in SPECTRAL_DIMS)
 
     @property
     def frequency(self) -> DataArray:
@@ -1172,7 +1202,7 @@ class Spectrum(ABC):
         if use_spline:
             if not fmin == 0.0 or np.isfinite(fmax):
                 warn(
-                    f"The fmin and fmax parameters are ignored if use_spline is set to True"
+                    "The fmin and fmax parameters are ignored if use_spline is set to True"
                 )
 
             data = spline_peak_frequency(self.frequency.values, self.e.values, **kwargs)
@@ -1330,20 +1360,6 @@ class Spectrum(ABC):
         :return: Spectrum object
         """
         return cls(open_dataset(path, **kwargs))
-
-    @classmethod
-    def from_dataset(cls: _T, dataset: Dataset, mapping=None) -> _T:
-        """
-        Create a spectrum object from a xarray dataset.
-
-        :param dataset: xarray dataset
-        :param mapping: dictionary mapping the xarray dataset names to the spectrum names
-        :return: Spectrum object
-        """
-        if mapping is not None:
-            dataset = dataset.copy(deep=False).rename(mapping)
-
-        return cls(dataset)
 
 
 ########################################################################################################################

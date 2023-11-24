@@ -85,7 +85,8 @@ References
 """
 
 
-from roguewavespectrum import Spectrum2D, Spectrum1D
+from roguewavespectrum._wavespectrum1D import Spectrum1D
+from roguewavespectrum._wavespectrum2D import Spectrum2D
 from abc import ABC, abstractmethod
 from scipy.special import gamma
 import numpy
@@ -101,6 +102,7 @@ from ._variable_names import (
     NAME_T,
     NAME_DEPTH,
 )
+from typing import Literal
 
 
 def parametric_directional_spectrum(
@@ -195,7 +197,8 @@ class DirShape(ABC):
         self.width_degrees = (
             width_degrees  #: Width of the directional distribution in degrees
         )
-        self.mean_direction_degrees = mean_direction_degrees  #: Mean direction of the waves in degrees in the assumed coordinate system.
+        self.mean_direction_degrees = mean_direction_degrees  #: Mean direction of the waves in degrees in the assumed
+        # coordinate system.
 
     def values(
         self, direction_degrees: numpy.ndarray, renormalize: bool = False
@@ -635,3 +638,53 @@ class FreqJonswap(FreqShape):
             * peak_enhancement[msk]
         )
         return values
+
+
+def create_freq_shape(
+    period: float,
+    waveheight: float,
+    shape_name: Literal["jonswap", "pm", "phillips", "gaussian"],
+) -> FreqShape:
+    """
+    Create a frequency shape object.
+    :param period: Period measure in seconds
+    :param waveheight: Wave height
+    :param shape_name: frequency shape, one of 'jonswap','pm','phillips','gaussian'
+    :return: FreqShape object
+    """
+    if shape_name == "jonswap":
+        return FreqJonswap(
+            peak_frequency_hertz=1 / period, significant_waveheight_meter=waveheight
+        )
+    elif shape_name == "pm":
+        return FreqPiersonMoskowitz(
+            peak_frequency_hertz=1 / period, significant_waveheight_meter=waveheight
+        )
+    elif shape_name == "phillips":
+        return FreqPhillips(
+            peak_frequency_hertz=1 / period, significant_waveheight_meter=waveheight
+        )
+    elif shape_name == "gaussian":
+        return FreqGaussian(
+            peak_frequency_hertz=1 / period, significant_waveheight_meter=waveheight
+        )
+    else:
+        raise ValueError(f"Unknown frequency shape {shape_name}")
+
+
+def create_dir_shape(
+    direction: float, spread: float, shape_name: Literal["cosN", "cos2N"]
+) -> DirShape:
+    """
+    Create a directional shape object.
+    :param direction: Mean direction
+    :param spread: Directional spread
+    :param shape_name: Directional shape, one of 'cosN','cos2N'
+    :return: DirShape object
+    """
+    if shape_name == "cosN":
+        return DirCosineN(mean_direction_degrees=direction, width_degrees=spread)
+    elif shape_name == "cos2N":
+        return DirCosine2N(mean_direction_degrees=direction, width_degrees=spread)
+    else:
+        raise ValueError(f"Unknown directional shape {shape_name}.")
