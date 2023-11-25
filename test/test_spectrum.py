@@ -1,8 +1,7 @@
 import numpy as np
 
 from roguewavespectrum import (
-    Spectrum1D,
-    Spectrum2D,
+    Spectrum,
     concatenate_spectra,
 )
 from roguewavespectrum.parametric import (
@@ -20,7 +19,7 @@ from xarray import DataArray
 import os
 
 
-def helper_create_spectrum() -> Spectrum2D:
+def helper_create_spectrum() -> Spectrum:
     angles = helper_angles()
     frequency = helper_frequency()
     frequency_shape = FreqPiersonMoskowitz(0.1, 2)
@@ -76,7 +75,7 @@ def helper_time(N, hour_offset=None):
     ]
 
 
-def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Spectrum2D]:
+def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Spectrum]:
     """
     Helper to create a list of spectra
     :return:
@@ -109,7 +108,7 @@ def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Spectrum2
     return out
 
 
-def helper_create_spectra(N, depth=inf) -> Tuple[Spectrum2D, Spectrum1D]:
+def helper_create_spectra(N, depth=inf) -> Tuple[Spectrum, Spectrum]:
     spectra = helper_create_spectra_list(N=N, depth=depth)
     spectra = concatenate_spectra(spectra, dim="time")
     return spectra, spectra.as_frequency_spectrum()
@@ -145,10 +144,10 @@ def test_concatenate():
     ]
 
     # Concatenate with given dimension
-    spectra2 = concatenate_spectra(spectrum, dim="time")
+    _ = concatenate_spectra(spectrum, dim="time")
 
     # Concatenate without given dimension
-    spectra3 = concatenate_spectra(spectrum)
+    _ = concatenate_spectra(spectrum)
 
 
 def test_concatenate_1d():
@@ -183,14 +182,14 @@ def test_save_and_load():
     spec = helper_create_spectrum()
     spec.to_netcdf("test.nc")
 
-    new_spec = Spectrum2D.from_netcdf("test.nc")
+    new_spec = Spectrum.from_netcdf("test.nc")
     assert_allclose(spec.hm0(), new_spec.hm0(), 1e-4, 1e-4)
     os.remove("test.nc")
 
     spec = concatenate_spectra(helper_create_spectra_list(4), dim="time")
     spec.to_netcdf("test2.nc")
 
-    new_spec = Spectrum2D.from_netcdf("test2.nc")
+    new_spec = Spectrum.from_netcdf("test2.nc")
     assert_allclose(spec.hm0(), new_spec.hm0(), 1e-4, 1e-4)
     os.remove("test2.nc")
 
@@ -218,8 +217,8 @@ def test_isel():
 def test_spectrum1d():
     spec = helper_create_spectrum()
     spec1d = spec.as_frequency_spectrum()
-    assert spec1d.dims_spectral == ["frequency"]
-    assert spec1d.dims == ["frequency"]
+    assert spec1d.dims_spectral == ("frequency",)
+    assert spec1d.dims == ("frequency",)
 
 
 def test_spectrum2d():
@@ -231,8 +230,8 @@ def test_spectrum2d():
             spec2d = spec1d.as_frequency_direction_spectrum(
                 72, method=method, solution_method=solution_method
             )
-            assert spec2d.dims_spectral == ["frequency", "direction"]
-            assert spec2d.dims == ["time", "frequency", "direction"]
+            assert spec2d.dims_spectral == ("frequency", "direction")
+            assert spec2d.dims == ("time", "frequency", "direction")
             assert_allclose(
                 spec2d.hm0(),
                 spec1d.hm0(),
@@ -324,7 +323,7 @@ def test_variance_density():
     specs = helper_create_spectra(4)
     for spec in specs:
 
-        if isinstance(spec, Spectrum1D):
+        if not spec.is_2d:
             helper_assert(
                 spec.variance_density,
                 ["time", "frequency"],
@@ -341,12 +340,6 @@ def test_variance_density():
                 ["time", "frequency", "direction"],
                 (4, len(helper_frequency()), len(helper_angles())),
             )
-
-
-def test_e():
-    specs = helper_create_spectra(4)
-    for spec in specs:
-        helper_assert(spec.e, ["time", "frequency"], (4, len(helper_frequency())))
 
 
 def test_a1():
@@ -420,14 +413,14 @@ def test_tm01():
 
     tm01 = array([7.72671553, 7.72671553, 7.72671553, 7.72671553])
     for spec in specs:
-        helper_assert(spec.tm01(), ["time"], (4,), tm01)
+        helper_assert(spec.mean_period(), ["time"], (4,), tm01)
 
 
 def test_tm02():
     specs = helper_create_spectra(4)
     tm02 = array([7.14851571, 7.14851571, 7.14851571, 7.14851571])
     for spec in specs:
-        helper_assert(spec.tm02(), ["time"], (4,), tm02)
+        helper_assert(spec.zero_crossing_period(), ["time"], (4,), tm02)
 
 
 def test_peak_index():
@@ -626,10 +619,10 @@ def test_interpolate():
     for spec in specs:
         intp_spec = spec.interpolate({"time": intp_time})
         assert_allclose(intp_spec.hm0(), intp_hm0, rtol=1e-3, atol=1e-3)
-        out_dims = spec.dims
+        out_dims = list(spec.dims)
         out_dims.remove("time")
 
-        assert intp_spec.dims == out_dims
+        assert intp_spec.dims == tuple(out_dims)
 
 
 def test_interpolate_frequency():
@@ -677,60 +670,10 @@ def test_interpolate_frequency():
 def test_wavenumber_spectral_density():
     specs = helper_create_spectra(4)
     for spec in specs:
-        density = spec.wavenumber_spectral_density
+        _ = spec.wavenumber_spectral_density
 
 
 def test_wavenumber_directional_spectral_density():
     specs = helper_create_spectra(4)
     spec = specs[0]
-    density = spec.wavenumber_directional_spectral_density
-
-
-if __name__ == "__main__":
-    test_interpolate_frequency()
-    test_concatenate()
-    test_spectrum1d()
-    test_concatenate_1d()
-    test_spectrum2d()
-    test_sel()
-    test_isel()
-    test_save_and_load()
-    test_frequency_moment()
-    test_number_of_frequencies()
-    test_radian_frequency()
-    test_frequency()
-    test_latitude()
-    test_longitude()
-    test_time()
-    test_variance_density()
-    test_e()
-    test_a1()
-    test_b1()
-    test_a2()
-    test_b2()
-    test_m0()
-    test_m1()
-    test_m2()
-    test_tm01()
-    test_tm02()
-    test_peak_index()
-    test_peak_frequency()
-    test_peak_period()
-    test_peak_direction()
-    test_peak_directional_spread()
-    test_mean_direction()
-    test_mean_direction_per_frequency()
-    test_mean_spread_per_frequency()
-    test_mean_directional_spread()
-    test_mean_a1()
-    test_mean_b1()
-    test_mean_a2()
-    test_mean_b2()
-    test_depth()
-    test_wavenumber()
-    test_wavelength()
-    test_peak_wavenumber()
-    test_significant_waveheight()
-    test_mean_period()
-    test_zero_crossing_period()
-    test_interpolate()
+    _ = spec.wavenumber_directional_spectral_density

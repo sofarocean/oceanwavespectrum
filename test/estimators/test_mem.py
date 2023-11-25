@@ -4,12 +4,12 @@ from roguewavespectrum.parametric import (
     FreqPiersonMoskowitz,
 )
 import numpy
-from roguewavespectrum import concatenate_spectra, Spectrum2D
+from roguewavespectrum import concatenate_spectra, Spectrum
 from datetime import datetime, timezone
 from numpy.testing import assert_allclose
 
 
-def get_2d_spec() -> Spectrum2D:
+def get_2d_spec() -> Spectrum:
     freq = numpy.linspace(0, 1, 20)
     dir = numpy.linspace(0, 360, 36, endpoint=False)
     time = datetime(2022, 1, 1, tzinfo=timezone.utc)
@@ -25,10 +25,6 @@ def get_2d_spec() -> Spectrum2D:
         direction_shape,
         time=time,
     )
-    # spec = parametric_directional_spectrum(
-    #     freq, frequency_shape="pm", peak_frequency_hertz=0.1, significant_waveheight_meter=1, direction_degrees=dir, direction_shape="raised_cosine",
-    #     mean_direction_degrees=35, width_degrees=20, depth=numpy.inf, time=time
-    # )
     return concatenate_spectra([spec], "time")
 
 

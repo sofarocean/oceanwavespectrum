@@ -12,9 +12,22 @@ from roguewavespectrum._physical_constants import (
     PhysicsOptions,
     _as_physicsoptions_lwt,
 )
-from abc import ABC, abstractmethod
+from ._directions import (
+    DirectionalConvention,
+    DirectionalUnit,
+    wave_mean_direction,
+    wave_directional_spread,
+    convert_unit,
+    convert_angle_convention,
+    get_angle_convention_and_unit,
+)
 
-from typing import TypeVar, List, Mapping
+from roguewavespectrum._estimators.estimate import (
+    estimate_directional_spectrum_from_moments,
+    Estimators,
+)
+
+from typing import TypeVar, List, Mapping, Tuple
 from xarray import Dataset, DataArray, concat, where, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
@@ -31,24 +44,24 @@ from ._variable_names import (
     NAME_K,
     NAME_W,
     set_conventions,
+    NAME_D,
+    NAME_E,
+    NAME_e,
+    NAME_a1,
+    NAME_b1,
+    NAME_a2,
+    NAME_b2,
 )
 
-from ._directions import (
-    wave_mean_direction,
-    wave_directional_spread,
-    DirectionalUnit,
-    DirectionalConvention,
-)
+from ._spline_interpolation import cumulative_frequency_interpolation_1d_variable
 
 _T = TypeVar("_T")
 _number_or_dataarray = TypeVar("_number_or_dataarray", DataArray, Number)
 
 
-class Spectrum(ABC):
+class Spectrum:
     """
-    Base class for wave spectra. This class provides the basic functionality for wave spectra, which is extended by
-    `spectrum.wavespectrum1d.Spectrum1D` and `spectrum.wavespectrum1d.Spectrum2D` classes for either 1D or 2D spectra.
-    This class should never be instantiated directly, but should be used as a base class for the other classes.
+    Class for wave spectra. This class provides the basic functionality for 1D and 2D wave spectra.
     """
 
     def __init__(
@@ -84,35 +97,155 @@ class Spectrum(ABC):
             except KeyError:
                 continue
 
+        # initialize labels
+        if "ids" in self.dataset:
+            if "unique_ids" not in dataset.coords:
+                ids = np.unique(dataset["unique_ids"])
+                self.dataset = self.dataset.assign_coords(unique_ids=ids)
+
+        # 1D or 2D spectra?
+        if self.is_2d:
+            required_variables = [NAME_F, NAME_D, NAME_E]
+        else:
+            required_variables = [NAME_F, NAME_e]
+
+        for name in required_variables:
+            if name not in dataset and name not in dataset.coords:
+                raise ValueError(
+                    f"Required variable/coordinate {name} is"
+                    f" not specified in the dataset"
+                )
+
     # Dunder methods
     # -----------------
-    def __copy__(self: _T) -> _T:
-        return self.__class__(self.dataset.copy(), self.physics_options)
+    def __copy__(self: "Spectrum") -> "Spectrum":
+        return self.__class__(self.dataset.copy(), self._physics_options)
 
-    def __deepcopy__(self: _T, memodict) -> _T:
-        return self.__class__(self.copy(deep=True))
+    def __deepcopy__(self: "Spectrum", memodict) -> "Spectrum":
+        return self.__class__(self.dataset.copy(deep=True), self._physics_options)
 
     # Private methods
     # -----------------
+    def _directionally_integrate(self, data_array: DataArray) -> DataArray:
+        return (data_array * self.direction_binwidth).sum(NAME_D, skipna=True)
 
     @property
-    @abstractmethod
     def _spectrum(self) -> DataArray:
-        ...
+        if self.is_2d:
+            return self.dataset[NAME_E]
+        else:
+            return self.dataset[NAME_e]
 
     @_spectrum.setter
-    @abstractmethod
-    def _spectrum(self, value) -> DataArray:
-        ...
+    def _spectrum(self, value):
+        if self.is_2d:
+            self.dataset[NAME_E] = value
+        else:
+            self.dataset[NAME_e] = value
+
+    @property
+    def _has_identifiers(self) -> bool:
+        return "identifier" in self.dataset
 
     # Operations
     # ------------
+
+    def as_frequency_direction_spectrum(
+        self: "Spectrum",
+        number_of_directions: int,
+        method: Estimators = "mem2",
+        solution_method="scipy",
+    ) -> "Spectrum":
+        """
+        Construct a 2D directional energy spectrum based on the directional moments and a specified spectral
+        reconstruction method.
+
+        :param number_of_directions: number of directions to use in the reconstruction. The directions are given by
+        np.linspace(0,360,number_of_directions,endpoint=False)
+
+        :param method: Choose a method in ['mem','mem2']
+            mem: maximum entrophy (in the Boltzmann sense) method
+            Lygre, A., & Krogstad, H. E. (1986). Explicit expression and
+            fast but tends to create narrow spectra anderroneous secondary peaks.
+
+            mem2: use entrophy (in the Shannon sense) to maximize. Likely
+            best method see- Benoit, M. (1993).
+
+        :param solution_method: Only relevant for MeM2. Choose a solution method in ['scipy','newton'] This determines
+            if we solve the nonlinear set of equations using scipy or a custom numba implemented newton-root finder.
+            The newton solver is faster but may be less robust. For details we refer to comments in the code itself.
+
+        :return: Spectrum object
+
+        REFERENCES:
+        Benoit, M. (1993). Practical comparative performance survey of methods
+            used for estimating directional wave spectra from heave-pitch-roll data.
+            In Coastal Engineering 1992 (pp. 62-75).
+
+        Lygre, A., & Krogstad, H. E. (1986). Maximum entropy estimation of the
+            directional distribution in ocean wave spectra.
+            Journal of Physical Oceanography, 16(12), 2052-2060.
+
+        """
+        if self.is_2d:
+            return self.copy()
+
+        direction = np.linspace(0, 360, number_of_directions, endpoint=False)
+
+        output_array = estimate_directional_spectrum_from_moments(
+            self.variance_density.values,
+            self.a1.values,
+            self.b1.values,
+            self.a2.values,
+            self.b2.values,
+            direction,
+            method=method,
+            solution_method=solution_method,
+        )
+
+        dims = list(self.dims_space_time) + [NAME_F, NAME_D]
+        coords = {x: self.dataset[x].values for x in self.dims}
+        coords[NAME_D] = direction
+
+        data = {NAME_E: (dims, output_array)}
+        for x in self.dataset:
+            if x in SPECTRAL_VARS:
+                continue
+            data[x] = (self.dims_space_time, self.dataset[x].values)
+
+        return Spectrum(
+            Dataset(data_vars=data, coords=coords),
+            physics_options=self._physics_options,
+        )
+
+    def as_frequency_spectrum(self) -> "Spectrum":
+        """
+        Return a 1D spectrum by integrating over the directions and return a Spectrum object. This will also include
+        the a1,b1,a2,b2 moments as estimated from the 2D spectrum. If the object already is a 1D spectrum, the object
+        returns a shallow copy of itself.
+        :return: Spectrum object
+        """
+        if not self.is_2d:
+            return self.copy()
+
+        dataset = {
+            "a1": self.a1,
+            "b1": self.b1,
+            "a2": self.a2,
+            "b2": self.b2,
+            "variance_density": self.variance_density,
+        }
+        for name in self.dataset:
+            if name not in SPECTRAL_VARS:
+                dataset[name] = self.dataset[name]
+        return Spectrum(Dataset(dataset), physics_options=self._physics_options)
+
     def bandpass(
-        self: _T,
+        self: "Spectrum",
         fmin: float = 0.0,
         fmax: float = np.inf,
         interpolate_to_limits: bool = True,
-    ) -> _T:
+    ) -> "Spectrum":
         """
         Bandpass the spectrum to the given limits such that the frequency coordinates of the spectrum are given as
 
@@ -141,7 +274,7 @@ class Spectrum(ABC):
         cls = type(self)
         return cls(dataset)
 
-    def copy(self: _T, deep=True) -> _T:
+    def copy(self: "Spectrum", deep=True) -> "Spectrum":
         """
         Return a copy of the object.
         :param deep: If True, perform a deep copy. Otherwise, perform a shallow copy.
@@ -152,7 +285,7 @@ class Spectrum(ABC):
         else:
             return self.__copy__()
 
-    def drop_invalid(self: _T) -> _T:
+    def drop_invalid(self: "Spectrum") -> "Spectrum":
         """
         Drop invalid spectra from the dataset. Invalid spectra are defined as spectra with NaN values in all spectral
         :return: Returns a new WaveSpectrum object with the invalid spectra removed.
@@ -169,7 +302,7 @@ class Spectrum(ABC):
         """
         self.dataset = self.dataset.fillna(value)
 
-    def flatten(self: "Spectrum", flattened_coordinate="index") -> _T:
+    def flatten(self: "Spectrum", flattened_coordinate="index") -> "Spectrum":
         """
         Serialize the non-spectral dimensions creating a single leading dimension without a coordinate.
         """
@@ -187,7 +320,7 @@ class Spectrum(ABC):
         # Calculate the flattened shape
         new_shape = (length,)
         new_spectral_shape = (length, *self.spectral_shape)
-        new_dims = [flattened_coordinate] + self.dims_spectral
+        new_dims = [flattened_coordinate] + list(self.dims_spectral)
 
         linear_index = DataArray(data=np.arange(0, length), dims=flattened_coordinate)
         indices = np.unravel_index(linear_index.values, shape)
@@ -216,8 +349,12 @@ class Spectrum(ABC):
         return cls(Dataset(dataset))
 
     def interpolate(
-        self: _T, coordinates, extrapolation_value=0.0, method="linear", **kwargs
-    ) -> _T:
+        self: "Spectrum",
+        coordinates,
+        extrapolation_value=0.0,
+        method="linear",
+        **kwargs,
+    ) -> "Spectrum":
         """
         Interpolate the spectrum to the given coordinates. The coordinates should be a dictionary with the dimension
         name as key and the coordinate as value. Uses the xarray interp method. Extrapolation is done by filling the
@@ -231,25 +368,48 @@ class Spectrum(ABC):
         if "time" in coordinates:
             coordinates["time"] = to_datetime64(coordinates["time"])
 
-        spectrum = self.__class__(
-            self.dataset.interp(
-                coords=coordinates,
-                method=method,
-                kwargs={"fill_value": extrapolation_value},
-            ),
-            physics_options=self._physics_options,
-            **kwargs,
-        )
+        if self.is_2d:
+            spectrum = Spectrum(
+                self.dataset.interp(
+                    coords=coordinates,
+                    method=method,
+                    kwargs={"fill_value": extrapolation_value},
+                ),
+                physics_options=self._physics_options,
+                **kwargs,
+            )
+        else:
+            # For 1D interpolation we have to take care to also interpolate the Fourier moments.
+            _dataset = Dataset()
+            _moments = [NAME_a1, NAME_b1, NAME_a2, NAME_b2]
+
+            for name in self.dataset:
+                _name = str(name)
+                if _name in _moments:
+                    _dataset = _dataset.assign(
+                        {_name: getattr(self, _name) * self.variance_density}
+                    )
+                else:
+                    _dataset = _dataset.assign({_name: self.dataset[_name]})
+
+            interpolated_data = _dataset.interp(coords=coordinates, method=method)
+            for name in _moments:
+                interpolated_data[name] = (
+                    interpolated_data[name] / interpolated_data[NAME_e]
+                )
+
+            spectrum = Spectrum(interpolated_data)
+
         spectrum.fillna(extrapolation_value)
         return spectrum
 
     def interpolate_frequency(
-        self: _T,
+        self: "Spectrum",
         new_frequencies,
         extrapolation_value: float = 0.0,
         method: str = "linear",
         **kwargs,
-    ) -> _T:
+    ) -> "Spectrum":
         """
         Interpolate the spectrum to the given frequencies. Convenience method for interpolate. See interpolate for
         more information.
@@ -259,20 +419,49 @@ class Spectrum(ABC):
         :param method: interpolation method (see xarray interp method)
         :return: Interpolated spectrum
         """
-        _object = self.interpolate(
-            {NAME_F: new_frequencies},
-            extrapolation_value=extrapolation_value,
-            method=method,
-            **kwargs,
-        )
-        _object.fillna(extrapolation_value)
-        return _object
+        if method == "spline":
+            if self.is_2d:
+                raise ValueError(
+                    "Spline interpolation is only available for 1D spectra"
+                )
 
-    def isel(self: _T, *args, **kwargs) -> _T:
+            if isinstance(new_frequencies, DataArray):
+                new_frequencies = new_frequencies.values
+
+            self.fillna(0.0)
+            frequency_axis = self.dims.index(NAME_F)
+            interpolated_data = cumulative_frequency_interpolation_1d_variable(
+                new_frequencies, self.dataset, frequency_axis=frequency_axis, **kwargs
+            )
+            spectrum = Spectrum(
+                interpolated_data, physics_options=self._physics_options
+            )
+            spectrum.fillna(extrapolation_value)
+
+        else:
+            spectrum = self.interpolate(
+                {NAME_F: new_frequencies},
+                extrapolation_value=extrapolation_value,
+                method=method,
+                **kwargs,
+            )
+        return spectrum
+
+    def isel(self: "Spectrum", *args, **kwargs) -> "Spectrum":
         dataset = Dataset()
         for var in self.dataset:
             dataset = dataset.assign({var: self.dataset[var].isel(*args, **kwargs)})
         return self.__class__(dataset=dataset)
+
+    @property
+    def is_2d(self) -> bool:
+        if NAME_D in self.dataset.coords:
+            return True
+        else:
+            return False
+
+    def is_1d(self) -> bool:
+        return not self.is_2d
 
     def is_invalid(self) -> DataArray:
         """
@@ -291,13 +480,33 @@ class Spectrum(ABC):
         """
         return ~self.is_invalid()
 
-    def sel(self: _T, *args, **kwargs) -> _T:
+    def sel(self: "Spectrum", *args, **kwargs) -> "Spectrum":
         dataset = Dataset()
         for var in self.dataset:
             dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
         return self.__class__(dataset=dataset)
 
-    def where(self: _T, condition: DataArray) -> _T:
+    def sel_by_id(self: "Spectrum", item: str) -> "Spectrum":
+        """
+        Select spectra by identifier.
+        :param item: identifier of the spectra to select.
+        :return: Spectrum object with the selected spectra.
+        """
+        if self._has_identifiers:
+            return self.isel(index=self.dataset["ids"] == item)
+        else:
+            raise ValueError(
+                "To select spectra by ID the dataset must have IDs specified upon creation"
+            )
+
+    @property
+    def ids(self) -> List[str]:
+        if self._has_identifiers:
+            return list(self.dataset["unique_ids"].values)
+        else:
+            raise ValueError("This dataset has no identifiers associated with spectra")
+
+    def where(self: "Spectrum", condition: DataArray) -> "Spectrum":
         """
         Apply a boolean mask to the dataset.
         :param condition: Boolean mask indicating which spectra to keep
@@ -356,22 +565,22 @@ class Spectrum(ABC):
         return {dim: self.dataset[dim] for dim in self.dims_spectral}
 
     @property
-    def dims(self) -> List[str]:
+    def dims(self) -> Tuple[str]:
         """
-        Return a list of the dimensions of the variance density spectrum.
+        Return a tuple of the dimensions of the variance density spectrum.
 
         :return: list[str] with names of dimensions.
         """
-        return [str(x) for x in self._spectrum.dims]
+        return tuple(str(x) for x in self._spectrum.dims)
 
     @property
-    def dims_space_time(self) -> List[str]:
+    def dims_space_time(self) -> Tuple[str]:
         """
-        Return a list of the spatial and temporal dimensions of the variance density spectrum.
+        Return a tuple of the spatial and temporal dimensions of the variance density spectrum.
 
         :return: list[str] with names of spatial and temporal dimensions.
         """
-        return [str(x) for x in self._spectrum.dims if x not in SPECTRAL_DIMS]
+        return tuple(str(x) for x in self._spectrum.dims if x not in SPECTRAL_DIMS)
 
     @property
     def depth(self) -> DataArray:
@@ -400,13 +609,78 @@ class Spectrum(ABC):
         return set_conventions(data_array, NAME_DEPTH, overwrite=True)
 
     @property
-    def dims_spectral(self) -> List[str]:
+    def dims_spectral(self) -> Tuple[str]:
         """
-        Return a list of the spectral dimensions of the variance density spectrum.
+        Return a tuple of the spectral dimensions of the variance density spectrum.
 
         :return: list[str] with names of spectral dimensions.
         """
-        return [str(x) for x in self._spectrum.dims if x in SPECTRAL_DIMS]
+        return tuple(str(x) for x in self._spectrum.dims if x in SPECTRAL_DIMS)
+
+    def direction(
+        self,
+        directional_unit: DirectionalUnit = "degree",
+        directional_convention: DirectionalConvention = "mathematical",
+    ) -> DataArray:
+        """
+        Return the direction of the variance density spectrum in the specified convention and unit.
+        :param directional_unit: Directional unit to return the direction in. Options are "degree" or "rad"
+        :param directional_convention: Directional convention to return the direction in. Options are "oceanographical",
+            "mathematical" or "meteorological"
+        :return: directions as a dataset
+        """
+        if not self.is_2d:
+            raise ValueError("Direction is only applicable for 2D spectra")
+        from_convention, from_unit = get_angle_convention_and_unit(
+            self.dataset[NAME_D],
+            default_convention="mathematical",
+            default_unit="degree",
+        )
+        angle = convert_unit(self.dataset[NAME_D], directional_unit, from_unit)
+        angle = convert_angle_convention(
+            angle, directional_convention, from_convention, units=directional_unit
+        )
+        angle = set_conventions(angle, [NAME_D, directional_convention], overwrite=True)
+        angle.attrs["units"] = directional_unit
+        return angle
+
+    @property
+    def direction_binwidth(self) -> DataArray:
+        """
+        Calculate the step size between the direction bins. Because the direction bins are circular, we use a modular
+        difference estimate.
+        :return:
+        """
+        if not self.is_2d:
+            raise ValueError("Direction is only applicable for 2D spectra")
+
+        direction = self.direction()
+        unit = direction.attrs["units"]
+        if unit == "rad":
+            wrap = 2 * np.pi
+        elif unit == "degree":
+            wrap = 360
+        else:
+            raise ValueError(f"Unknown directional unit {unit}")
+
+        forward = (
+            np.diff(self.direction().values, append=self.direction()[0]) + wrap / 2
+        ) % wrap - wrap / 2
+        backward = (
+            np.diff(self.direction().values, prepend=self.direction()[-1]) + wrap / 2
+        ) % wrap - wrap / 2
+
+        data_array = set_conventions(
+            DataArray(
+                data=(forward + backward) / 2,
+                coords={NAME_D: self.direction().values},
+                dims=[NAME_D],
+            ),
+            "direction_bins",
+            overwrite=True,
+        )
+        data_array.attrs["units"] = unit
+        return data_array
 
     @property
     def frequency(self) -> DataArray:
@@ -473,6 +747,13 @@ class Spectrum(ABC):
         return len(self.dims)
 
     @property
+    def number_of_directions(self) -> int:
+        "Number of directions. Only applicable for 2D spectra"
+        if not self.is_2d:
+            raise ValueError("Number of directions is only applicable for 2D spectra")
+        return len(self.direction())
+
+    @property
     def number_of_frequencies(self) -> int:
         """
         Number of frequencies in the spectrum.
@@ -496,6 +777,15 @@ class Spectrum(ABC):
             return shape
         else:
             return 1
+
+    @property
+    def radian_direction_mathematical(self) -> DataArray:
+        if not self.is_2d:
+            raise ValueError("Direction is only applicable for 2D spectra")
+
+        return self.direction(
+            directional_unit="rad", directional_convention="mathematical"
+        )
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -549,7 +839,6 @@ class Spectrum(ABC):
     # Spectral properties
     # --------------------------------------------
     @property
-    @abstractmethod
     def a1(self) -> DataArray:
         """
         Normalized Fourier moment of the directional distribution function. See Kuik et al. (1988), eq A1.
@@ -559,7 +848,18 @@ class Spectrum(ABC):
 
         :return: normalized Fourier moment cos(theta)
         """
-        ...
+        if self.is_2d:
+            data_array = (
+                self._directionally_integrate(
+                    self._spectrum * np.cos(self.radian_direction_mathematical)
+                )
+                / self.variance_density
+            )
+            data_array = set_conventions(data_array, NAME_a1, overwrite=True)
+        else:
+            data_array = self.dataset[NAME_a1]
+
+        return data_array
 
     @property
     def A1(self) -> DataArray:
@@ -568,10 +868,9 @@ class Spectrum(ABC):
 
         :return: Fourier moment cos(theta)
         """
-        return set_conventions(self.a1 * self.e, "A1", overwrite=True)
+        return set_conventions(self.a1 * self.variance_density, "A1", overwrite=True)
 
     @property
-    @abstractmethod
     def a2(self) -> DataArray:
         """
         Normalized Fourier moment of the directional distribution function. See Kuik et al. (1988), eq A1.
@@ -581,7 +880,17 @@ class Spectrum(ABC):
 
         :return: normalized Fourier moment cos(2*theta)
         """
-        ...
+        if self.is_2d:
+            data_array = (
+                self._directionally_integrate(
+                    self._spectrum * np.cos(2 * self.radian_direction_mathematical)
+                )
+                / self.variance_density
+            )
+            data_array = set_conventions(data_array, NAME_a2, overwrite=True)
+        else:
+            data_array = self.dataset[NAME_a2]
+        return data_array
 
     @property
     def A2(self) -> DataArray:
@@ -590,10 +899,9 @@ class Spectrum(ABC):
 
         :return: Fourier moment cos(2*theta)
         """
-        return set_conventions(self.a2 * self.e, "A2", overwrite=True)
+        return set_conventions(self.a2 * self.variance_density, "A2", overwrite=True)
 
     @property
-    @abstractmethod
     def b1(self) -> DataArray:
         """
         Normalized Fourier moment of the directional distribution function. See Kuik et al. (1988), eq A1.
@@ -603,10 +911,28 @@ class Spectrum(ABC):
 
         :return: normalized Fourier moment sin(theta)
         """
-        ...
+        if self.is_2d:
+            data_array = (
+                self._directionally_integrate(
+                    self._spectrum * np.sin(self.radian_direction_mathematical)
+                )
+                / self.variance_density
+            )
+            data_array = set_conventions(data_array, NAME_b1, overwrite=True)
+        else:
+            data_array = self.dataset[NAME_b1]
+        return data_array
 
     @property
-    @abstractmethod
+    def B1(self) -> DataArray:
+        """
+        Fourier moment of the directional distribution function (=b1(f)*e(f)).
+
+        :return: Fourier moment sin(theta)
+        """
+        return set_conventions(self.b1 * self.variance_density, "B1", overwrite=True)
+
+    @property
     def b2(self) -> DataArray:
         """
         Normalized Fourier moment of the directional distribution function. See Kuik et al. (1988), eq A1.
@@ -616,16 +942,17 @@ class Spectrum(ABC):
 
         :return: normalized Fourier moment sin(2*theta)
         """
-        ...
-
-    @property
-    def B1(self) -> DataArray:
-        """
-        Fourier moment of the directional distribution function (=b1(f)*e(f)).
-
-        :return: Fourier moment sin(theta)
-        """
-        return set_conventions(self.b1 * self.e, "B1", overwrite=True)
+        if self.is_2d:
+            data_array = (
+                self._directionally_integrate(
+                    self._spectrum * np.sin(2 * self.radian_direction_mathematical)
+                )
+                / self.variance_density
+            )
+            data_array = set_conventions(data_array, NAME_b2, overwrite=True)
+        else:
+            data_array = self.dataset[NAME_b2]
+        return data_array
 
     @property
     def B2(self) -> DataArray:
@@ -634,7 +961,7 @@ class Spectrum(ABC):
 
         :return: Fourier moment sin(2*theta)
         """
-        return set_conventions(self.b2 * self.e, "B2", overwrite=True)
+        return set_conventions(self.b2 * self.variance_density, "B2", overwrite=True)
 
     @property
     def cumulative_density_function(self) -> DataArray:
@@ -669,14 +996,12 @@ class Spectrum(ABC):
         )
 
     @property
-    @abstractmethod
-    def e(self) -> DataArray:
-        """
-        1D variance density spectrum as data array.
-
-        :return: Variance density [m^2/Hz].
-        """
-        ...
+    def directional_variance_density(self) -> DataArray:
+        if not self.is_2d:
+            raise ValueError(
+                "Directional variance density is only applicable for 2D spectra"
+            )
+        return self.dataset[NAME_E]
 
     @property
     def mean_direction_per_frequency(
@@ -741,7 +1066,7 @@ class Spectrum(ABC):
     def slope_spectrum(self) -> DataArray:
         wavenumber = self.wavenumber
         data_array = set_conventions(
-            self.e * wavenumber**2, "slope_spectrum", overwrite=True
+            self.variance_density * wavenumber**2, "slope_spectrum", overwrite=True
         )
         data_array = data_array.assign_coords({NAME_K: wavenumber})
         return data_array
@@ -762,7 +1087,43 @@ class Spectrum(ABC):
 
         :return: Variance density [m^2/Hz].
         """
-        return self.e
+        if self.is_2d:
+            return set_conventions(
+                self._directionally_integrate(self._spectrum), NAME_e, overwrite=True
+            )
+        else:
+            return self.dataset[NAME_e]
+
+    @property
+    def wavenumber_directional_spectral_density(self) -> DataArray:
+        """
+        Wavenumber Spectral density. Conversion through multiplication with the Jacobian of the
+        transformation such that
+
+            E(f) df = E(k) dk
+
+        with e the density as function of frequency (f) or wavenumber (k), and df and dk the differentials of the
+        respective variables. Note that with w = 2 * pi * f, the Jacobian is equal to
+
+        df/dk =   dw/dk * df/dw = groupspeed / ( 2 * pi)
+
+        Note: requores that the spectra as directional information.
+
+        :return: Wavenumber spectral density.
+        """
+        if not self.is_2d:
+            raise ValueError(
+                "Wavenumber directional spectral density can only be calculated for 2D spectra"
+            )
+
+        wavenumber = self.wavenumber
+        data_array = set_conventions(
+            self.variance_density * self.groupspeed / (np.pi * 2),
+            "wavenumber_directional_variance_density",
+            overwrite=True,
+        )
+        data_array = data_array.assign_coords({NAME_K: wavenumber})
+        return data_array
 
     @property
     def wavenumber_spectral_density(self) -> DataArray:
@@ -781,7 +1142,7 @@ class Spectrum(ABC):
         """
         wavenumber = self.wavenumber
         data_array = set_conventions(
-            self.e * self.groupspeed / (np.pi * 2),
+            self.variance_density * self.groupspeed / (np.pi * 2),
             "wavenumber_variance_density",
             overwrite=True,
         )
@@ -901,7 +1262,9 @@ class Spectrum(ABC):
         :return: frequency moment
         """
         return set_conventions(
-            _integrate(self.e * self.frequency**power, NAME_F, fmin, fmax),
+            _integrate(
+                self.variance_density * self.frequency**power, NAME_F, fmin, fmax
+            ),
             "MN",
             overwrite=True,
         )
@@ -965,7 +1328,9 @@ class Spectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        a1m = _integrate(self.a1 * self.e, NAME_F, fmin, fmax) / self.m0(fmin, fmax)
+        a1m = _integrate(self.a1 * self.variance_density, NAME_F, fmin, fmax) / self.m0(
+            fmin, fmax
+        )
         return set_conventions(a1m, "a1", overwrite=True)
 
     def mean_a2(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
@@ -978,7 +1343,9 @@ class Spectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        a2m = _integrate(self.a2 * self.e, NAME_F, fmin, fmax) / self.m0(fmin, fmax)
+        a2m = _integrate(self.a2 * self.variance_density, NAME_F, fmin, fmax) / self.m0(
+            fmin, fmax
+        )
         return set_conventions(a2m, "a2", overwrite=True)
 
     def mean_b1(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
@@ -991,7 +1358,9 @@ class Spectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        b1m = _integrate(self.b1 * self.e, NAME_F, fmin, fmax) / self.m0(fmin, fmax)
+        b1m = _integrate(self.b1 * self.variance_density, NAME_F, fmin, fmax) / self.m0(
+            fmin, fmax
+        )
         return set_conventions(b1m, "b1", overwrite=True)
 
     def mean_direction(
@@ -1063,7 +1432,9 @@ class Spectrum(ABC):
         :param fmax: maximum frequency, inclusive
         :return:
         """
-        b2m = _integrate(self.b2 * self.e, NAME_F, fmin, fmax) / self.m0(fmin, fmax)
+        b2m = _integrate(self.b2 * self.variance_density, NAME_F, fmin, fmax) / self.m0(
+            fmin, fmax
+        )
         return set_conventions(b2m, "b2", overwrite=True)
 
     def mean_squared_slope(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
@@ -1172,10 +1543,12 @@ class Spectrum(ABC):
         if use_spline:
             if not fmin == 0.0 or np.isfinite(fmax):
                 warn(
-                    f"The fmin and fmax parameters are ignored if use_spline is set to True"
+                    "The fmin and fmax parameters are ignored if use_spline is set to True"
                 )
 
-            data = spline_peak_frequency(self.frequency.values, self.e.values, **kwargs)
+            data = spline_peak_frequency(
+                self.frequency.values, self.variance_density.values, **kwargs
+            )
             if len(self.dims_space_time) == 0:
                 data = data[0]
 
@@ -1198,7 +1571,7 @@ class Spectrum(ABC):
         mask = (self.dataset[NAME_F].values >= fmin) & (
             self.dataset[NAME_F].values < fmax
         )
-        return self.e.where(mask, 0).argmax(dim=NAME_F)
+        return self.variance_density.where(mask, 0).argmax(dim=NAME_F)
 
     def peak_period(
         self, fmin: float = 0.0, fmax: float = np.inf, use_spline=False, **kwargs
@@ -1270,7 +1643,7 @@ class Spectrum(ABC):
             overwrite=True,
         )
 
-    def tm01(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+    def mean_period(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
         Mean period, estimated as the inverse of the center of mass of the
         spectral curve under the 1d spectrum.
@@ -1280,10 +1653,24 @@ class Spectrum(ABC):
         :return: Mean period
         """
         return set_conventions(
-            self.m0(fmin, fmax) / self.m1(fmin, fmax), "Tm01", overwrite=True
+            self.m0(fmin, fmax) / self.m1(fmin, fmax), "mean_period", overwrite=True
         )
 
-    def tm02(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+    def energy_period(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+        """
+        Wave energy period defined as the ratio of the zeroth and second frequency moment.
+
+        :param fmin: minimum frequency, inclusive
+        :param fmax: maximum frequency, inclusive
+        :return: Mean period
+        """
+        return set_conventions(
+            self.m1(fmin, fmax) / self.m0(fmin, fmax), "energy_period", overwrite=True
+        )
+
+    def zero_crossing_period(
+        self, fmin: float = 0.0, fmax: float = np.inf
+    ) -> DataArray:
         """
         Zero crossing period based on Rice's spectral estimate.
 
@@ -1292,7 +1679,9 @@ class Spectrum(ABC):
         :return: Zero crossing period
         """
         return set_conventions(
-            np.sqrt(self.m0(fmin, fmax) / self.m2(fmin, fmax)), "Tm02", overwrite=True
+            np.sqrt(self.m0(fmin, fmax) / self.m2(fmin, fmax)),
+            "zero_crossing_period",
+            overwrite=True,
         )
 
     def waveage(self, windspeed: typing.Union[Number, DataArray]) -> DataArray:
@@ -1322,7 +1711,7 @@ class Spectrum(ABC):
     # Class methods
     # ===================================================================================================================
     @classmethod
-    def from_netcdf(cls: _T, path: str, **kwargs) -> _T:
+    def from_netcdf(cls: "Spectrum", path: str, **kwargs) -> "Spectrum":
         """
         Load spectrum from a netcdf file. See xarray open_dataset method for more information on use.
 
@@ -1332,16 +1721,37 @@ class Spectrum(ABC):
         return cls(open_dataset(path, **kwargs))
 
     @classmethod
-    def from_dataset(cls: _T, dataset: Dataset, mapping=None) -> _T:
+    def from_dataset(
+        cls: "Spectrum", dataset: Dataset, mapping=None, deep=False
+    ) -> "Spectrum":
         """
-        Create a spectrum object from a xarray dataset.
+        Create a spectrum object from a xarray dataset. The dataset must either contain for
+
+        Spectrum1D:
+        - the variables: "variance_density", "a1", "b1", "a2", "b2"
+        - coordinates: "frequency",
+
+        Spectrum2D:
+        - the variable: "directional_variance_density"
+        - coordinates: "frequency", "direction"
+
+        or a mapping must be provided that maps the dataset names to expected variable/coordinat names. Coordinate units
+        are  assumed to be assumed to be degrees [0,360) and Hz (frequency>=0). Units of the spectrum are assumed to be
+        m^2/Hz or m^2/Hz/degree. The default interpretation of the direction is mathematical (90 degrees is North), and
+        direction indicates the direction the waves are going towards, and it is assumed directional moments are
+        consistent with this interpretation.
+
+        Note that by default we create a shallow copy of the dataset.
 
         :param dataset: xarray dataset
         :param mapping: dictionary mapping the xarray dataset names to the spectrum names
+        :param deep: If True, create a deep copy of the input dataset.
+
         :return: Spectrum object
         """
+        dataset = dataset.copy(deep=deep)
         if mapping is not None:
-            dataset = dataset.copy(deep=False).rename(mapping)
+            dataset = dataset.rename(mapping)
 
         return cls(dataset)
 
