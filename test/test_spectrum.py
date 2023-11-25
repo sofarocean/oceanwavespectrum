@@ -1,8 +1,7 @@
 import numpy as np
 
 from roguewavespectrum import (
-    Spectrum1D,
-    Spectrum2D,
+    Spectrum,
     concatenate_spectra,
 )
 from roguewavespectrum.parametric import (
@@ -20,7 +19,7 @@ from xarray import DataArray
 import os
 
 
-def helper_create_spectrum() -> Spectrum2D:
+def helper_create_spectrum() -> Spectrum:
     angles = helper_angles()
     frequency = helper_frequency()
     frequency_shape = FreqPiersonMoskowitz(0.1, 2)
@@ -76,7 +75,7 @@ def helper_time(N, hour_offset=None):
     ]
 
 
-def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Spectrum2D]:
+def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Spectrum]:
     """
     Helper to create a list of spectra
     :return:
@@ -109,7 +108,7 @@ def helper_create_spectra_list(N, depth=inf, hour_offset=None) -> List[Spectrum2
     return out
 
 
-def helper_create_spectra(N, depth=inf) -> Tuple[Spectrum2D, Spectrum1D]:
+def helper_create_spectra(N, depth=inf) -> Tuple[Spectrum, Spectrum]:
     spectra = helper_create_spectra_list(N=N, depth=depth)
     spectra = concatenate_spectra(spectra, dim="time")
     return spectra, spectra.as_frequency_spectrum()
@@ -183,14 +182,14 @@ def test_save_and_load():
     spec = helper_create_spectrum()
     spec.to_netcdf("test.nc")
 
-    new_spec = Spectrum2D.from_netcdf("test.nc")
+    new_spec = Spectrum.from_netcdf("test.nc")
     assert_allclose(spec.hm0(), new_spec.hm0(), 1e-4, 1e-4)
     os.remove("test.nc")
 
     spec = concatenate_spectra(helper_create_spectra_list(4), dim="time")
     spec.to_netcdf("test2.nc")
 
-    new_spec = Spectrum2D.from_netcdf("test2.nc")
+    new_spec = Spectrum.from_netcdf("test2.nc")
     assert_allclose(spec.hm0(), new_spec.hm0(), 1e-4, 1e-4)
     os.remove("test2.nc")
 
@@ -324,7 +323,7 @@ def test_variance_density():
     specs = helper_create_spectra(4)
     for spec in specs:
 
-        if isinstance(spec, Spectrum1D):
+        if not spec.is_2d:
             helper_assert(
                 spec.variance_density,
                 ["time", "frequency"],
@@ -341,12 +340,6 @@ def test_variance_density():
                 ["time", "frequency", "direction"],
                 (4, len(helper_frequency()), len(helper_angles())),
             )
-
-
-def test_e():
-    specs = helper_create_spectra(4)
-    for spec in specs:
-        helper_assert(spec.e, ["time", "frequency"], (4, len(helper_frequency())))
 
 
 def test_a1():
@@ -420,14 +413,14 @@ def test_tm01():
 
     tm01 = array([7.72671553, 7.72671553, 7.72671553, 7.72671553])
     for spec in specs:
-        helper_assert(spec.tm01(), ["time"], (4,), tm01)
+        helper_assert(spec.mean_period(), ["time"], (4,), tm01)
 
 
 def test_tm02():
     specs = helper_create_spectra(4)
     tm02 = array([7.14851571, 7.14851571, 7.14851571, 7.14851571])
     for spec in specs:
-        helper_assert(spec.tm02(), ["time"], (4,), tm02)
+        helper_assert(spec.zero_crossing_period(), ["time"], (4,), tm02)
 
 
 def test_peak_index():

@@ -2,8 +2,7 @@
 Factory methods to help create spectra. Mostly for convinience
 """
 
-from roguewavespectrum._wavespectrum1D import Spectrum1D
-from roguewavespectrum._wavespectrum2D import Spectrum2D
+from roguewavespectrum._spectrum import Spectrum
 from roguewavespectrum._variable_names import (
     NAME_F,
     NAME_a1,
@@ -37,7 +36,7 @@ def create_spectrum1d(
     a2: np.ndarray,
     b2: np.ndarray,
     **kwargs,
-) -> Spectrum1D:
+) -> Spectrum:
     """
     Create a roguewavespectrum.Spectrum1D object for a given 1D spectrum with a1/b1/a2/b2.
 
@@ -126,16 +125,16 @@ def create_spectrum1d(
         },
         coords=coords,
     )
-    return Spectrum1D(dataset, **kwargs)
+    return Spectrum(dataset, **kwargs)
 
 
 def create_spectrum2d(
     coordinates: Union[tuple[np.ndarray, np.ndarray], Sequence[tuple[str, np.ndarray]]],
     variance_density: np.ndarray,
     **kwargs,
-) -> Spectrum2D:
+) -> Spectrum:
     """
-    Create a roguewavespectrum.Spectrum2D object for a given spectrum. Spectral units are [m^2/Hz/degree]. Frequency
+    Create a roguewavespectrum.Spectrum object for a given spectrum. Spectral units are [m^2/Hz/degree]. Frequency
     units are [Hz], direction units are [degrees] and are measured counter-clockwise from east, and refer to the
     direction the waves are travelling *to*.
 
@@ -222,7 +221,7 @@ def create_spectrum2d(
         },
         coords=coords,
     )
-    return Spectrum2D(dataset, **kwargs)
+    return Spectrum(dataset, **kwargs)
 
 
 def create_parametric_spectrum1d(
@@ -230,7 +229,7 @@ def create_parametric_spectrum1d(
     waveheight: Union[float, np.ndarray],
     period: Union[float, np.ndarray],
     shape_name: Literal["jonswap", "pm", "phillips", "gaussian"] = "jonswap",
-) -> Spectrum1D:
+) -> Spectrum:
     """
     Create a parametric 1D spectrum with a given shape. Shapes are:
     jonswap, pm, phillips, gaussian. See roguewavespectrum.parametric for details.
@@ -254,7 +253,7 @@ def create_parametric_spectrum1d(
         freq_shape = create_freq_shape(tp, hs, shape_name)
         out += [parametric_spectrum(frequencies, freq_shape)]
 
-    spectra = concatenate_spectra(out)  # type: Spectrum1D
+    spectra = concatenate_spectra(out)
     return spectra
 
 
@@ -267,7 +266,7 @@ def create_parametric_spectrum2d(
     spread: Union[float, np.ndarray],
     frequency_shape_name: Literal["jonswap", "pm", "phillips", "gaussian"] = "jonswap",
     direction_shape_name: Literal["cosN", "cos2N"] = "cosN",
-) -> Spectrum2D:
+) -> Spectrum:
     """
     Create a parametric 2D spectrum with a given frequency and direction shape.
     :param frequencies: frequency array in Hz
@@ -304,5 +303,5 @@ def create_parametric_spectrum2d(
             )
         ]
 
-    spectrum = concatenate_spectra(out)  # type: Spectrum2D
+    spectrum = concatenate_spectra(out)
     return spectrum

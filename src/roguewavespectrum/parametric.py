@@ -83,10 +83,6 @@ References
     Phillips, O. M. (1958). The equilibrium range in the spectrum of wind-generated waves.
     Journal of Fluid Mechanics, 4(4), 426-434.
 """
-
-
-from roguewavespectrum._wavespectrum1D import Spectrum1D
-from roguewavespectrum._wavespectrum2D import Spectrum2D
 from abc import ABC, abstractmethod
 from scipy.special import gamma
 import numpy
@@ -103,6 +99,7 @@ from ._variable_names import (
     NAME_DEPTH,
 )
 from typing import Literal
+from ._spectrum import Spectrum
 
 
 def parametric_directional_spectrum(
@@ -112,7 +109,7 @@ def parametric_directional_spectrum(
     direction_shape: "DirShape",
     renormalize: bool = True,
     **kwargs,
-) -> Spectrum2D:
+) -> Spectrum:
     """
     Create a parametrized directional frequency spectrum according to a given frequency or directional distribution.
 
@@ -153,7 +150,7 @@ def parametric_directional_spectrum(
         },
     )
 
-    return Spectrum2D(dataset)
+    return Spectrum(dataset)
 
 
 def parametric_spectrum(
@@ -161,7 +158,7 @@ def parametric_spectrum(
     frequency_shape: "FreqShape",
     renormalize: bool = True,
     **kwargs,
-) -> Spectrum1D:
+) -> Spectrum:
     # We create a 1d spectrum from an integrated 2d spectrum with assumed raised cosine shape. This allows us to
     # add the a1/b1 parameters easily.
     direction_degrees = numpy.linspace(0, 360, 36, endpoint=False)

@@ -2,7 +2,6 @@ from typing import Literal
 
 import numpy as np
 from xarray import DataArray
-import warnings
 
 NAME_F: Literal["frequency"] = "frequency"
 NAME_K: Literal["wavenumber"] = "wavenumber"
@@ -125,21 +124,28 @@ cf_conventions = {
     },
     "Tp": {
         "units": "s",
-        "standard_name": "sea_surface_wave_mean_period",
-        "long_name": "Mean wave period",
+        "standard_name": "sea_surface_wave_period_at_variance_spectral_density_maximum",
+        "long_name": "Peak period",
         "missing_value": np.NAN,
         "valid_min": 0,
     },
-    "Tm01": {
+    "mean_period": {
         "units": "s",
         "standard_name": "sea_surface_wave_mean_period_from_variance_spectral_density_first_frequency_moment",
         "long_name": "Mean wave period",
         "missing_value": np.NAN,
         "valid_min": 0,
     },
-    "Tm02": {
+    "zero_crossing_period": {
         "units": "s",
         "standard_name": "sea_surface_wave_mean_period_from_variance_spectral_density_second_frequency_moment",
+        "long_name": "Mean wave period",
+        "missing_value": np.NAN,
+        "valid_min": 0,
+    },
+    "energy_period": {
+        "units": "s",
+        "standard_name": "sea_surface_wave_mean_period_from_variance_spectral_density_inverse_frequency_moment",
         "long_name": "Mean wave period",
         "missing_value": np.NAN,
         "valid_min": 0,
