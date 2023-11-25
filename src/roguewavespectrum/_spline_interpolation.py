@@ -512,6 +512,9 @@ def cumulative_frequency_interpolation_1d_variable(
     )
     interpolated_energy = interpolated_cdf_spline.derivative()(interpolation_frequency)
 
+    # numerical rounding can cause negative values, which are unphysical. Set these to zero.
+    interpolated_energy[interpolated_energy < 0.0] = 0.0
+
     _dataset = _dataset.assign(
         {
             NAME_e: DataArray(
@@ -522,7 +525,7 @@ def cumulative_frequency_interpolation_1d_variable(
         }
     )
 
-    msk = interpolated_energy > 0
+    msk = interpolated_energy > 0.0
 
     for _name in SPECTRAL_MOMENTS:
         interpolated_densities_spline = _cdf_interpolate_spline(
