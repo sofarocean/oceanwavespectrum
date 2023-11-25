@@ -152,7 +152,7 @@ class Spectrum:
 
     def as_frequency_direction_spectrum(
         self: "Spectrum",
-        number_of_directions: int,
+        number_of_directions: int = 36,
         method: Estimators = "mem2",
         solution_method="scipy",
     ) -> "Spectrum":

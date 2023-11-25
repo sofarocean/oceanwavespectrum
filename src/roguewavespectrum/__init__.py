@@ -322,6 +322,7 @@ from ._factory_methods import (
     create_parametric_spectrum2d as _create_parametric_spectrum2d,
 )
 from ._operations import concatenate_spectra
+from ._sofar._spotter_sdcard_data import read_spotter_csv as _read_spotter_csv
 
 import roguewavespectrum.parametric as parametric
 
@@ -329,5 +330,5 @@ create_spectrum1d = _create_spectrum1d
 create_spectrum2d = _create_spectrum2d
 create_parametric_spectrum1d = _create_parametric_spectrum1d
 create_parametric_spectrum2d = _create_parametric_spectrum2d
-
+read_spotter_csv = _read_spotter_csv
 Spectrum = _Spectrum
