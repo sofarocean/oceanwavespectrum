@@ -5,7 +5,7 @@ from roguewavespectrum.parametric import (
 )
 
 import numpy
-from roguewavespectrum import concatenate_spectra, Spectrum2D
+from roguewavespectrum import concatenate_spectra, Spectrum
 from datetime import datetime, timezone
 from numpy.testing import assert_allclose
 from roguewavespectrum._estimators import (
@@ -19,7 +19,7 @@ from roguewavespectrum._estimators import (
 from scipy.optimize import root
 
 
-def get_2d_spec() -> Spectrum2D:
+def get_2d_spec() -> Spectrum:
     freq = numpy.linspace(0, 1, 20)
     dir = numpy.linspace(0, 360, 36, endpoint=False)
     time = datetime(2022, 1, 1, tzinfo=timezone.utc)
