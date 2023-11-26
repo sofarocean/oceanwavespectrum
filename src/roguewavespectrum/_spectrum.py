@@ -27,7 +27,7 @@ from roguewavespectrum._estimators.estimate import (
     Estimators,
 )
 
-from typing import TypeVar, List, Mapping, Tuple
+from typing import TypeVar, List, Mapping, Tuple, Union
 from xarray import Dataset, DataArray, concat, where, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
@@ -607,6 +607,19 @@ class Spectrum:
                 )
 
         return set_conventions(data_array, NAME_DEPTH, overwrite=True)
+
+    @depth.setter
+    def depth(self, value: Union[Number, DataArray]):
+        if np.isscalar(value):
+            value = DataArray(
+                data=np.full(self.space_time_shape, value),
+                dims=self.dims_space_time,
+                coords=self.coords_space_time,
+                name="Depth [m]",
+            )
+        elif not isinstance(value, DataArray):
+            raise ValueError("Depth must be a scalar or DataArray")
+        self.dataset[NAME_DEPTH] = value
 
     @property
     def dims_spectral(self) -> Tuple[str]:

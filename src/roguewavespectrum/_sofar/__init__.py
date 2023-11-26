@@ -1,1 +1,2 @@
-from ._spotter_sdcard_data import read_spotter_csv
+from ._spotter_sdcard_data import spotter_read_csv
+from ._spotter_wavefleet_data import spotter_fetch_bulkdata, spotter_fetch_spectrum
