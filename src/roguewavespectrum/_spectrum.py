@@ -97,12 +97,6 @@ class Spectrum:
             except KeyError:
                 continue
 
-        # initialize labels
-        if "ids" in self.dataset:
-            if "unique_ids" not in dataset.coords:
-                ids = np.unique(dataset["unique_ids"])
-                self.dataset = self.dataset.assign_coords(unique_ids=ids)
-
         # 1D or 2D spectra?
         if self.is_2d:
             required_variables = [NAME_F, NAME_D, NAME_E]
@@ -145,7 +139,7 @@ class Spectrum:
 
     @property
     def _has_identifiers(self) -> bool:
-        return "identifier" in self.dataset
+        return "ids" in self.dataset
 
     # Operations
     # ------------
@@ -485,26 +479,6 @@ class Spectrum:
         for var in self.dataset:
             dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
         return self.__class__(dataset=dataset)
-
-    def sel_by_id(self: "Spectrum", item: str) -> "Spectrum":
-        """
-        Select spectra by identifier.
-        :param item: identifier of the spectra to select.
-        :return: Spectrum object with the selected spectra.
-        """
-        if self._has_identifiers:
-            return self.isel(index=self.dataset["ids"] == item)
-        else:
-            raise ValueError(
-                "To select spectra by ID the dataset must have IDs specified upon creation"
-            )
-
-    @property
-    def ids(self) -> List[str]:
-        if self._has_identifiers:
-            return list(self.dataset["unique_ids"].values)
-        else:
-            raise ValueError("This dataset has no identifiers associated with spectra")
 
     def where(self: "Spectrum", condition: DataArray) -> "Spectrum":
         """
@@ -1832,3 +1806,82 @@ def _bandpass(
         )
 
     return data.interp({dim: coords})
+
+
+class BuoySpectrum(Spectrum):
+    def __init__(self, dataset: Dataset, physics_options: PhysicsOptions = None):
+        super().__init__(dataset, physics_options=physics_options)
+
+        if "ids" not in self.dataset:
+            raise ValueError(
+                "Buoy spectrum requires a dataset with the 'ids' variable that indicates the buoy id"
+            )
+
+        if "time" not in self.dataset:
+            raise ValueError(
+                "Buoy spectrum requires a dataset with the 'time' variable that indicates the time of each"
+                "spectral observation"
+            )
+
+        if "unique_ids" not in dataset.coords:
+            ids = np.unique(dataset["ids"])
+            self.dataset = self.dataset.assign_coords(unique_ids=ids)
+
+    def sel_by_id(self: "BuoySpectrum", item: str) -> "BuoySpectrum":
+        """
+        Select spectra by identifier.
+        :param item: identifier of the spectra to select.
+        :return: Spectrum object with the selected spectra.
+        """
+        spectrum = self.where(self.dataset["ids"] == item)
+        dataset = spectrum.dataset.swap_dims({"index": "time"})
+        return self.__class__(dataset)
+
+    @property
+    def ids(self) -> List[str]:
+        return list(self.dataset["unique_ids"].values)
+
+    def __getitem__(self, item) -> "BuoySpectrum":
+        return self.sel_by_id(item)
+
+    def __keys__(self):
+        return self.ids
+
+    def __contains__(self, item):
+        return item in self.ids
+
+    def __iter__(self):
+        return (self.sel_by_id(id) for id in self.ids)
+
+    def items(self):
+        return ((id, self.sel_by_id(id)) for id in self.ids)
+
+    @classmethod
+    def from_trajectory_dataset(cls, dataset: Dataset, mapping=None) -> "BuoySpectrum":
+        """
+        Create a spectrum object from a xarray trajectory dataset.
+
+        :param dataset: xarray dataset
+        :param mapping: dictionary mapping the xarray dataset names to the spectrum names.
+        :return: Spectrum object
+        """
+        if mapping is not None:
+            dataset = dataset.copy(deep=False).rename(mapping)
+
+        if "trajectory" in dataset:
+            trajectory = dataset["trajectory"].values
+            rowsizes = dataset["rowsize"].values
+            labels = []
+            for ordinal_index, rowsize in enumerate(rowsizes):
+                labels += rowsize * [trajectory[ordinal_index]]
+
+            dataset = dataset.assign({"ids": ("index", labels)})
+            dataset = dataset.drop_vars(["trajectory", "rowsize"])
+
+        else:
+            raise ValueError(
+                "creating GroupedFrequencySpectrum from a trajectory dataset requires trajectory "
+                "information"
+            )
+
+        return cls(dataset)

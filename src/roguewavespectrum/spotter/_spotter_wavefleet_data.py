@@ -25,7 +25,7 @@ Functions:
 from datetime import datetime, timedelta
 from pysofar.spotter import Spotter, SofarApi
 from pysofar.wavefleet_exceptions import QueryError
-from roguewavespectrum._spectrum import Spectrum
+from roguewavespectrum._spectrum import BuoySpectrum
 from typing import Dict, List, Union, Sequence, Literal
 import xarray as xr
 import numpy as np
@@ -55,12 +55,12 @@ DATA_TYPES = Literal[
 ]
 
 
-def spotter_fetch_spectrum(
+def fetch_spectrum(
     spotter_ids: Union[str, Sequence[str]],
     start_date: Union[datetime, int, float, str] = None,
     end_date: Union[datetime, int, float, str] = None,
     **kwargs,
-) -> Spectrum:
+) -> BuoySpectrum:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
     interval.
@@ -80,14 +80,12 @@ def spotter_fetch_spectrum(
     WaveSpectrum1D object.
 
     """
-    return Spectrum(
-        spotter_fetch_bulkdata(
-            spotter_ids, "frequencyData", start_date, end_date, **kwargs
-        )
+    return BuoySpectrum(
+        fetch_bulkdata(spotter_ids, "frequencyData", start_date, end_date, **kwargs)
     )
 
 
-def spotter_fetch_bulkdata(
+def fetch_bulkdata(
     spotter_ids: Union[str, Sequence[str]],
     data_type: DATA_TYPES,
     start_date: Union[datetime, int, float, str] = None,
@@ -138,10 +136,10 @@ def spotter_fetch_bulkdata(
     """
 
     if session is None:
-        session = get_sofar_api()
+        session = _get_sofar_api()
 
     if spotter_ids is None:
-        spotter_ids = get_spotter_ids(sofar_api=session)
+        spotter_ids = fetch_spotter_ids(sofar_api=session)
 
     # Make sure we have a list object
     if not isinstance(spotter_ids, (list, tuple)):
@@ -170,7 +168,11 @@ def spotter_fetch_bulkdata(
         if spotter_data is not None:
             values += [spotter_data]
 
-    return xr.concat(values, dim="spotter_id")
+    data = xr.concat(values, dim="time")
+    data = data.drop_indexes("time")
+    data = data.reset_coords("time")
+    data = data.rename_dims({"time": "index"})
+    return data
 
 
 def _download_data(
@@ -195,7 +197,7 @@ def _download_data(
     return data
 
 
-def get_smart_mooring_data(
+def _get_smart_mooring_data(
     start_date: str, end_date: str, spotter: Spotter, max_days=None
 ):
     # We have a self imposed limit that we return to avoid overloading wavefleet.
@@ -256,7 +258,7 @@ def _unpaginate(
         for retry in range(0, NUMBER_OF_RETRIES + 1):
             try:
                 if var_name == "smartMooringData":
-                    json_data = get_smart_mooring_data(
+                    json_data = _get_smart_mooring_data(
                         start_date=start_date.isoformat(),
                         end_date=end_date.isoformat(),
                         spotter=spotter,
@@ -302,7 +304,9 @@ def _unpaginate(
             break
 
         objects = []
-        for _object in [_get_class(var_name, data) for data in json_data[var_name]]:
+        for _object in [
+            _get_class(var_name, data, spotter_id) for data in json_data[var_name]
+        ]:
             date = _object.time.values
 
             if date < start_date:
@@ -318,72 +322,46 @@ def _unpaginate(
             last_object = _object
             yield _object
 
-        start_date = last_object.time.values + timedelta(seconds=1)
+        start_date = pd.Timestamp(last_object.time.values + np.timedelta64(1, "s"))
 
 
-def _get_class(key, data) -> xr.Dataset:
+def _get_class(key, data, spotter_id) -> xr.Dataset:
     if key == "frequencyData":
         dataset = xr.Dataset(
             data_vars={
                 "variance_density": (
-                    (
-                        "spotter_id",
-                        "time",
-                        "frequency",
-                    ),
+                    ("frequency",),
                     np.array(data["varianceDensity"]),
                 ),
                 "a1": (
-                    (
-                        "spotter_id",
-                        "time",
-                        "frequency",
-                    ),
+                    ("frequency",),
                     np.array(data["a1"]),
                 ),
                 "b1": (
-                    (
-                        "spotter_id",
-                        "time",
-                        "frequency",
-                    ),
+                    ("frequency",),
                     np.array(data["b1"]),
                 ),
                 "a2": (
-                    (
-                        "spotter_id",
-                        "time",
-                        "frequency",
-                    ),
+                    ("frequency",),
                     np.array(data["a2"]),
                 ),
                 "b2": (
-                    (
-                        "spotter_id",
-                        "time",
-                        "frequency",
-                    ),
+                    ("frequency",),
                     np.array(data["b2"]),
                 ),
                 "latitude": (
-                    (
-                        "spotter_id",
-                        "time",
-                    ),
+                    (),
                     np.array(data["latitude"]),
                 ),
                 "longitude": (
-                    (
-                        "spotter_id",
-                        "time",
-                    ),
+                    (),
                     np.array(data["longitude"]),
                 ),
+                "ids": ((), spotter_id),
             },
             coords={
                 "time": pd.Timestamp(data["timestamp"]),
                 "frequency": np.array(data["frequency"]),
-                "spotter_id": data["spotterId"],
             },
         )
 
@@ -396,25 +374,25 @@ def _get_class(key, data) -> xr.Dataset:
                 continue
 
             data_vars[var_key] = (
-                (
-                    "spotter_id",
-                    "time",
-                ),
+                (),
                 np.array(value),
+            )
+            data_vars["ids"] = (
+                (),
+                spotter_id,
             )
 
         dataset = xr.Dataset(
             data_vars=data_vars,
             coords={
                 "time": pd.Timestamp(data["timestamp"]),
-                "spotter_id": data["spotterId"],
             },
         )
     return dataset
 
 
 # Helper functions
-def get_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
+def fetch_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
     """
     Get a list of Spotter ID's that are available through this account.
 
@@ -422,7 +400,7 @@ def get_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
     :return: List of spotters available through this account.
     """
     if sofar_api is None:
-        sofar_api = get_sofar_api()
+        sofar_api = _get_sofar_api()
     return sofar_api.device_ids
 
 
@@ -430,7 +408,7 @@ def get_spotter_ids(sofar_api: SofarApi = None) -> List[str]:
 _API = None
 
 
-def get_sofar_api(token=None) -> SofarApi:
+def _get_sofar_api(token=None) -> SofarApi:
     """
     Gets a new sofar API object if requested. Returned object is essentially a
     Singleton class-> next calls will return the stored object instead of
