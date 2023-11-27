@@ -60,7 +60,7 @@ def fetch_spectrum(
     start_date: Union[datetime, int, float, str] = None,
     end_date: Union[datetime, int, float, str] = None,
     **kwargs,
-) -> BuoySpectrum:
+) -> xr.Dataset:
     """
     Gets the requested frequency wave data for the spotter(s) in the given
     interval.
@@ -80,9 +80,7 @@ def fetch_spectrum(
     WaveSpectrum1D object.
 
     """
-    return BuoySpectrum(
-        fetch_bulkdata(spotter_ids, "frequencyData", start_date, end_date, **kwargs)
-    )
+    return fetch_bulkdata(spotter_ids, "frequencyData", start_date, end_date, **kwargs)
 
 
 def fetch_bulkdata(
@@ -452,3 +450,32 @@ class ExceptionNoDataForVariable(Exception):
     """
 
     pass
+
+
+class SpectralApiClient:
+    def __iter__(self, sofar_api: SofarApi = None):
+        self.sofar_api = sofar_api if sofar_api else _get_sofar_api()
+
+    def spotter_ids(self) -> List[str]:
+        """
+        Get a list of Spotter ID's that are available through this account.
+
+        :param sofar_api: valid SofarApi instance.
+        :return: List of spotters available through this account.
+        """
+        return self.sofar_api.device_ids
+
+    def fetch_spectrum(
+        self,
+        spotter_ids: Union[str, Sequence[str]],
+        start_date: Union[pd.Timestamp, datetime, int, float, str] = None,
+        end_date: Union[pd.Timestamp, datetime, int, float, str] = None,
+        **kwargs,
+    ) -> BuoySpectrum:
+
+        dataset = fetch_spectrum(
+            spotter_ids, start_date, end_date, session=self.sofar_api, **kwargs
+        )
+        spectrum = BuoySpectrum(dataset)
+
+        return spectrum

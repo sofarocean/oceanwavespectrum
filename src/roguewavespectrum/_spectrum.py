@@ -1267,6 +1267,18 @@ class Spectrum:
         """
         return set_conventions(4 * np.sqrt(self.m0(fmin, fmax)), "Hm0", overwrite=True)
 
+    def hrms(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+        """
+        Root mean square wave height estimated from the spectrum.
+
+        :param fmin: minimum frequency, inclusive
+        :param fmax: maximum frequency, inclusive
+        :return: RMS wave height
+        """
+        return set_conventions(
+            self.hm0(fmin, fmax) / np.sqrt(2), "Hrms", overwrite=True
+        )
+
     def m0(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
         Zero order frequency moment of the spectrum. Also referred to as total variance. Dimension
@@ -1837,24 +1849,20 @@ class BuoySpectrum(Spectrum):
         dataset = spectrum.dataset.swap_dims({"index": "time"})
         return self.__class__(dataset)
 
-    @property
-    def ids(self) -> List[str]:
-        return list(self.dataset["unique_ids"].values)
-
     def __getitem__(self, item) -> "BuoySpectrum":
         return self.sel_by_id(item)
 
-    def __keys__(self):
-        return self.ids
-
     def __contains__(self, item):
-        return item in self.ids
+        return item in self.keys()
 
     def __iter__(self):
-        return (self.sel_by_id(id) for id in self.ids)
+        return (id for id in self.keys())
+
+    def keys(self) -> List[str]:
+        return list(self.dataset["unique_ids"].values)
 
     def items(self):
-        return ((id, self.sel_by_id(id)) for id in self.ids)
+        return ((id, self.sel_by_id(id)) for id in self.keys())
 
     @classmethod
     def from_trajectory_dataset(cls, dataset: Dataset, mapping=None) -> "BuoySpectrum":

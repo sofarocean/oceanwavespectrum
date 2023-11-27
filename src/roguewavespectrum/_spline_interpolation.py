@@ -436,6 +436,8 @@ def spline_peak_frequency(
 
     :param frequency: Frequencies of the spectrum. Shape = ( nf, )
     :param frequency_spectrum: Frequency Variance density spectrum. Shape = ( np , nf )
+    :param frequency_axis: Axis along which the frequency is defined.
+    :param monotone_interpolation: If true, a monotone interpolation is used.
     :return: peak frequencies. Shape = ( np, )
     """
     #

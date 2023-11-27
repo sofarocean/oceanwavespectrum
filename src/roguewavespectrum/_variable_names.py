@@ -122,6 +122,12 @@ cf_conventions = {
         "missing_value": np.NAN,
         "valid_min": 0,
     },
+    "Hrms": {
+        "units": "m",
+        "long_name": "Root mean square waveheight",
+        "missing_value": np.NAN,
+        "valid_min": 0,
+    },
     "Tp": {
         "units": "s",
         "standard_name": "sea_surface_wave_period_at_variance_spectral_density_maximum",

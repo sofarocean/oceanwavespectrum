@@ -33,7 +33,7 @@ def _read_spotter_spectral_file(file):
     return {"time": np.array(time), "frequencies": frequencies, "values": values}
 
 
-def read_csv(path: str, depth=np.inf, **kwargs) -> Spectrum:
+def read_spectral_csv(path: str, depth=np.inf, **kwargs) -> Spectrum:
     """
     Read parsed spotter spectral data from a given folder and return a Spectrum object.
 
