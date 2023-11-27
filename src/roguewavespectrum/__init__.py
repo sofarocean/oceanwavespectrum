@@ -42,14 +42,8 @@ become maintainers.
 How well is this package tested?
 --------------------------------
 The package contains a number of unit tests, but those mostly test if the code runs, and if the code is consitent
-with previous behaviour, not if the code is correct. Most of these routines have been battlehardened through use in
-my own work (e.g. used in publications). With regard to domain knowledge, I am an expert in ocean waves, and I have
-been working with ocean wave spectra for over a decade, and all calculations are based on well established theory.
-
-Why the name?
---------------------------------
-Mostly because the name was available, I am not very creative when it comes to naming, and I liked it better than
-something more generic.
+with previous behaviour, not if the code is correct. Most of these routines have been in use in
+my own work and calculations are based on well established theory.
 
 Spectra
 =======
@@ -79,6 +73,17 @@ of the Spectrum object (or extract information otherwise not available). It also
 using remote zarr stores) is available to the user. While the spectrum object is thus essentially an extended Dataset
 object, I decided against inheriting from the xarray dataset object, as not all methods are applicable to the spectral
 object, and I wanted to avoid confusion (also following composition over inheritance).
+
+BuoySpectrum Object
+-------------------
+The `roguewavespectrum.BuoySpectrum` object is a subclass of the `roguewavespectrum.Spectrum` object, and is designed
+to specifically work with data from multiple different buoys under the assumption that the buoys have similar frequency
+ranges, but may not report at the same time (or have the same number of time entries) so that a 3D representation of the
+buoy dataset [buoy,time,frequency] is not possible (ragged arrays - we cannot use time as a coordinate). Instead, we
+represent all spectra as a single concatenated 2D dataset [index,frequency], and keep track of the buoy id's in a
+separate array. To inquire about the buoy id's we use the `buoy_spectrum.keys()` property, so that we may get a spectrum
+for an individual buoy as `buoy_spectrum[buoy_spectrum.keys()[0]]`. Essentially access acts as a dictionary, though
+assignment is not possible.
 
 Example
 -------
@@ -128,11 +133,6 @@ directions = spec.direction(directional_unit='degree',directional_convention='oc
 will raise an error if the underlying spectrum is a 1d spectrum (but work for a 2d spectrum). As an easy check we can
 do `spec.is_2d` to check if the spectrum is a 2d spectrum.
 
-Note; earlier versions implemented seperate Spectrum1D and Spectrum2D classes. As I was contemplating the design of
-this package I decided to merge these into a single Spectrum class to avoid a) some circular dependency issues, and b)
-more importantly to avoid deep class hierarchies which are painfull to maintain. (e.g say we want to add an object to
-specifically represent a buoy spectrum- this would then require a BuoySpectrum1D and BouySpectrum2D subclass, but no
-natural place to put the common functionality for buoys).
 
 Bulk Properties
 ===============
