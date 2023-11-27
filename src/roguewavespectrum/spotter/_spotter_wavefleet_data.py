@@ -41,7 +41,6 @@ MAX_LOCAL_LIMIT_BULK = 500
 
 # Number of retry attemps if a download fails.
 NUMBER_OF_RETRIES = 2
-
 MAX_DAYS_SMARTMOORING = 10
 
 DATA_TYPES = Literal[
