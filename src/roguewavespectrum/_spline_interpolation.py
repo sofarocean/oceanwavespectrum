@@ -436,6 +436,8 @@ def spline_peak_frequency(
 
     :param frequency: Frequencies of the spectrum. Shape = ( nf, )
     :param frequency_spectrum: Frequency Variance density spectrum. Shape = ( np , nf )
+    :param frequency_axis: Axis along which the frequency is defined.
+    :param monotone_interpolation: If true, a monotone interpolation is used.
     :return: peak frequencies. Shape = ( np, )
     """
     #
@@ -512,6 +514,9 @@ def cumulative_frequency_interpolation_1d_variable(
     )
     interpolated_energy = interpolated_cdf_spline.derivative()(interpolation_frequency)
 
+    # numerical rounding can cause negative values, which are unphysical. Set these to zero.
+    interpolated_energy[interpolated_energy < 0.0] = 0.0
+
     _dataset = _dataset.assign(
         {
             NAME_e: DataArray(
@@ -522,21 +527,11 @@ def cumulative_frequency_interpolation_1d_variable(
         }
     )
 
-    msk = interpolated_energy > 0
-
     for _name in SPECTRAL_MOMENTS:
-        interpolated_densities_spline = _cdf_interpolate_spline(
-            dataset[NAME_F].values,
-            dataset[_name].values * dataset[NAME_e].values,
-            monotone_interpolation=kwargs.get("monotone_interpolation_moments", False),
+        interpolated_densities_spline = cubic_spline(
+            dataset[NAME_F].values, dataset[_name].values
         )
-        interpolated_densities = interpolated_densities_spline.derivative()(
-            interpolation_frequency
-        )
-        # Avoid division by zero
-        interpolated_densities[msk] = (
-            interpolated_densities[msk] / interpolated_energy[msk]
-        )
+        interpolated_densities = interpolated_densities_spline(interpolation_frequency)
 
         _dataset = _dataset.assign(
             {

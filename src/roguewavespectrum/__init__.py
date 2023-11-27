@@ -313,6 +313,7 @@ References
 """
 # Some import shananigans to make sure pydoc documents these imports without having to expose the private package.
 from ._spectrum import Spectrum as _Spectrum
+from ._spectrum import BuoySpectrum as _BuoySpectrum
 from ._factory_methods import create_spectrum1d as _create_spectrum1d
 from ._factory_methods import create_spectrum2d as _create_spectrum2d
 from ._factory_methods import (
@@ -324,6 +325,7 @@ from ._factory_methods import (
 from ._operations import concatenate_spectra
 
 import roguewavespectrum.parametric as parametric
+import roguewavespectrum.spotter
 
 create_spectrum1d = _create_spectrum1d
 create_spectrum2d = _create_spectrum2d
@@ -331,3 +333,4 @@ create_parametric_spectrum1d = _create_parametric_spectrum1d
 create_parametric_spectrum2d = _create_parametric_spectrum2d
 
 Spectrum = _Spectrum
+BuoySpectrum = _BuoySpectrum

@@ -602,7 +602,9 @@ def _mem2_jacobian(lagrange_multiplier, twiddle_factors, direction_increment, ja
 
 @njit(cache=True, fastmath=_FASTMATH)
 def _mem2_directional_distribution(
-    lagrange_multiplier, direction_increment, twiddle_factors
+    lagrange_multiplier,
+    direction_increment,
+    twiddle_factors,
 ) -> np.ndarray:
     """
     Given the solution for the Lagrange multipliers- reconstruct the directional

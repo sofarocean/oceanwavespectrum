@@ -12,6 +12,7 @@ from roguewavespectrum._variable_names import (
     NAME_e,
     NAME_E,
     NAME_D,
+    NAME_DEPTH,
 )
 
 import numpy as np
@@ -114,6 +115,9 @@ def create_spectrum1d(
                 f"Size of coordinate number {index} associated with {dim} does not match the shape of the "
                 f"variance_density {shape}"
             )
+    depth = kwargs.get("depth", np.inf)
+    if np.isscalar(depth):
+        depth = np.zeros(variance_density.shape[:-1]) + depth
 
     dataset = Dataset(
         data_vars={
@@ -122,6 +126,7 @@ def create_spectrum1d(
             NAME_b1: (dims, b1),
             NAME_a2: (dims, a2),
             NAME_b2: (dims, b2),
+            NAME_DEPTH: (dims[:-1], depth),
         },
         coords=coords,
     )
@@ -215,9 +220,14 @@ def create_spectrum2d(
                 f"variance_density {shape}"
             )
 
+    depth = kwargs.get("depth", np.inf)
+    if np.isscalar(depth):
+        depth = np.zeros(variance_density.shape[:-2]) + depth
+
     dataset = Dataset(
         data_vars={
             NAME_E: (dims, variance_density),
+            NAME_DEPTH: (dims[:-2], depth),
         },
         coords=coords,
     )
