@@ -244,7 +244,7 @@ The first argument to the `roguewavespectrum.create_spectrum1d` method is a list
 values of the coordinates. The first tuple specifies the name and values of the first coordinate, the second tuple
 specifies the name and values of the second coordinate, etc. The last tuple must always be the frequency coordinate.
 
-The processes for creating a 2D spectrum is similar, though now we need to specify the frequency and directin - i.e.
+The processes for creating a 2D spectrum is similar, though now we need to specify the frequency and direction - i.e.
 ```python
 from roguewavespectrum import create_spectrum2d
 spectrum = create_spectrum2d(
