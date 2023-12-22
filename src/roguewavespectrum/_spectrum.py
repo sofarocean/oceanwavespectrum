@@ -27,7 +27,7 @@ from roguewavespectrum._estimators.estimate import (
     Estimators,
 )
 
-from typing import TypeVar, List, Mapping, Tuple, Union
+from typing import TypeVar, List, Mapping, Tuple, Union, Type
 from xarray import Dataset, DataArray, concat, where, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
@@ -61,17 +61,84 @@ _number_or_dataarray = TypeVar("_number_or_dataarray", DataArray, Number)
 
 class Spectrum:
     """
-    Class for wave spectra. This class provides the basic functionality for 1D and 2D wave spectra.
+    Class for wave spectra. This class provides the basic functionality for 1D and 2D wave spectra. The class is
+    based on xarray, and provides a number of convenience methods for working with wave spectra. To construct a
+    spectrum object given numpy arrays, use the create_spectrum1d or create_spectrum2d functions, or initialize the
+    class directly with a dataset object.
     """
 
     def __init__(
         self, dataset: Dataset, physics_options: PhysicsOptions = None, **kwargs
     ):
         """
-        Initialize a spectrum object.
+        Initialize a spectrum object from a xarray dataset. The contents on the dataset determines if the spectrum is
+        a 1D or 2D spectrum.
+
+        1D spectrum required variables:
+        - variance_density[...,frequency]: variance density spectrum
+        - a1[...,frequency]: Fourier moment a1
+        - b1[...,frequency]: Fourier moment b1
+        - a2[...,frequency]: Fourier moment a2
+        - b2[...,frequency]: Fourier moment b2
+        - frequency[frequency]: frequency coordinates
+
+        2D spectrum required variables:
+        - directional_variance_density[...,frequency,direction]: variance density spectrum
+        - frequency[frequency]: frequency coordinates
+        - direction[direction]: direction coordinates. Direction must be in degrees, and span [0,360) degrees.
+
+        The presence of either a `directional_variance_density` or `variance_density` variable determines if the
+        spectrum is a 1D or 2D spectrum. If both are present, an error is raised as the spectrum is ambiguous (i.e.
+        variance_density may or may not represent a directionally integrated version of directional_variance_density).
+
+        Leading dimensions are optional, preserved in calculations and output, may be named or anonymous, and may be
+        associated with coordinates. For example, if `variance_density` has dimensions `time` and `frequency`,
+        then calculating significant waveheight will return waveheigth with dimensions `time`.
+
+        We may optionally add, `time`, `latitude` or `longitude` as variables or as coordinates.
+
+        Example 1D dataset specification where we have spectra as function of frequency and time, and we have latitude,
+        longitude locations:
+        ```python
+        dataset = Dataset(
+            data_vars={
+                "variance_density": (["time","frequency"], variance_density),})
+                "a1": (["time","frequency"], a1),
+                "b1": (["time","frequency"], b1),
+                "a2": (["time","frequency"], a2),
+                "b2": (["time","frequency"], b2),
+                "latitude": (["time"], latitude),
+                "longitude": (["time"], longitude),
+            },
+            coords={"frequency": frequency,"time": time},
+        ```
+
+        Example 2D dataset specification where we have spectra as function of frequency:
+        ```python
+        dataset = Dataset(
+            data_vars={
+                "directional_variance_density": (["frequency","direction"], directional_variance_density),})
+            },
+            coords={"frequency": frequency,"direction": direction},
+        ```
+
+        Example 2D dataset specification where we have spectra as function of frequency, time, latitude and longitude (
+        e.g. as from a model):
+        ```python
+        dataset = Dataset(
+            data_vars={
+                "directional_variance_density": (["time,latitude,longitude,frequency","direction"],
+                    directional_variance_density),})
+            },
+            coords={"frequency": frequency,"direction": direction,"time": time, "latitude": latitude,
+                "longitude": longitude},
+        ```
+        Note that in this case "latitude and longitude" are coordinates on the object (as opposed to variables in
+        the 1D example above).
+
         :param dataset: Dataset containing the spectral data.
         :param physics_options: Options for calculating derived variables from linear wave theory.
-        :param kwargs: Not used.
+
         """
 
         self._physics_options = (
@@ -97,11 +164,21 @@ class Spectrum:
             except KeyError:
                 continue
 
+        if self.is_2d and self.is_1d:
+            raise ValueError(
+                "Only one of variance_density or directional_variance_density may be specified in the"
+                "dataset."
+            )
+
         # 1D or 2D spectra?
         if self.is_2d:
             required_variables = [NAME_F, NAME_D, NAME_E]
-        else:
+        elif self.is_1d:
             required_variables = [NAME_F, NAME_e]
+        else:
+            raise ValueError(
+                "The dataset does not contain a variance_density or directional_variance_density variable."
+            )
 
         for name in required_variables:
             if name not in dataset and name not in dataset.coords:
@@ -449,13 +526,17 @@ class Spectrum:
 
     @property
     def is_2d(self) -> bool:
-        if NAME_D in self.dataset.coords:
+        if NAME_E in self.dataset:
             return True
         else:
             return False
 
+    @property
     def is_1d(self) -> bool:
-        return not self.is_2d
+        if NAME_e in self.dataset:
+            return True
+        else:
+            return False
 
     def is_invalid(self) -> DataArray:
         """
@@ -539,7 +620,7 @@ class Spectrum:
         return {dim: self.dataset[dim] for dim in self.dims_spectral}
 
     @property
-    def dims(self) -> Tuple[str]:
+    def dims(self) -> Tuple[str, ...]:
         """
         Return a tuple of the dimensions of the variance density spectrum.
 
@@ -548,7 +629,7 @@ class Spectrum:
         return tuple(str(x) for x in self._spectrum.dims)
 
     @property
-    def dims_space_time(self) -> Tuple[str]:
+    def dims_space_time(self) -> Tuple[str, ...]:
         """
         Return a tuple of the spatial and temporal dimensions of the variance density spectrum.
 
@@ -1425,7 +1506,7 @@ class Spectrum:
         """
         Return the spectral weighted mean moment b1m defined as
 
-        .. math:: b_{2m} = \\frac{\\int_{f_{min}}^{f_{max}} b_2(f) E(f) df}{M_0}
+        $$b_{2m} = \\frac{\\int_{f_{min}}^{f_{max}} b_2(f) E(f) df}{M_0}$$
 
         :param fmin: minimum frequency, inclusive
         :param fmax: maximum frequency, inclusive
@@ -1710,7 +1791,7 @@ class Spectrum:
     # Class methods
     # ===================================================================================================================
     @classmethod
-    def from_netcdf(cls: "Spectrum", path: str, **kwargs) -> "Spectrum":
+    def from_netcdf(cls: Type["Spectrum"], path: str, **kwargs) -> "Spectrum":
         """
         Load spectrum from a netcdf file. See xarray open_dataset method for more information on use.
 
@@ -1721,7 +1802,7 @@ class Spectrum:
 
     @classmethod
     def from_dataset(
-        cls: "Spectrum", dataset: Dataset, mapping=None, deep=False
+        cls: Type["Spectrum"], dataset: Dataset, mapping=None, deep=False
     ) -> "Spectrum":
         """
         Create a spectrum object from a xarray dataset. The dataset must either contain for
@@ -1821,7 +1902,38 @@ def _bandpass(
 
 
 class BuoySpectrum(Spectrum):
+    """
+    Class for wave spectra derived from (multiple) buoys. The class is a subclass of Spectrum and inherits all
+    functionality from that class. The class adds functionality to select spectra by buoy identifier.
+    """
+
     def __init__(self, dataset: Dataset, physics_options: PhysicsOptions = None):
+        """
+        Create a spectrum object from a xarray dataset. In addition to the requirements of the Spectrum class, the
+        dataset must contain a leading index coordinate, and contain the variable "ids" that for each index indicates
+        the buoy (or observation platforms) unique identifier. The unique identifiers are used to select spectra by
+        buoy identifier.
+
+        Example 1D dataset:
+        ```python
+        dataset = Dataset(
+            data_vars={
+                "variance_density": (["index","frequency"], variance_density),})
+                "a1": (["index","frequency"], a1),
+                "b1": (["index","frequency"], b1),
+                "a2": (["index","frequency"], a2),
+                "b2": (["index","frequency"], b2),
+                "time": (["index"], latitude),
+                "latitude": (["index"], latitude),
+                "longitude": (["index"], longitude),
+                "ids": (["index"], ids),
+            },
+            coords={"frequency": frequency,"index": index},
+        ```
+
+        :param dataset: Dataset containing the spectral data.
+        :param physics_options: Options for calculating derived variables from linear wave theory.
+        """
         super().__init__(dataset, physics_options=physics_options)
 
         if "ids" not in self.dataset:
@@ -1859,7 +1971,7 @@ class BuoySpectrum(Spectrum):
         return (id for id in self.keys())
 
     def keys(self) -> List[str]:
-        return list(self.dataset["unique_ids"].values)
+        return self.dataset["unique_ids"].tolist()
 
     def items(self):
         return ((id, self.sel_by_id(id)) for id in self.keys())
