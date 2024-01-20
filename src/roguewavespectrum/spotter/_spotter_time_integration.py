@@ -1,6 +1,3 @@
-"""
-This module WILL BE DELETED. It is a temporary solution to data dependencies that should live in a spotter package.
-"""
 from numba import njit
 from numpy import (
     empty_like,
