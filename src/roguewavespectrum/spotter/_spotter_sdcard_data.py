@@ -1,5 +1,6 @@
 from roguewavespectrum._spectrum import Spectrum
 from roguewavespectrum._factory_methods import create_spectrum1d
+from ._spotter_post_processing import spotter_frequency_response_correction
 from datetime import datetime
 import pandas as pd
 import numpy as np
@@ -72,4 +73,10 @@ def read_spectral_csv(path: str, depth=np.inf, **kwargs) -> Spectrum:
         depth=depth,
     )
     spectrum.fillna(0.0)
+
+    post_process = kwargs.get("post_process", True)
+    if post_process:
+        # Correct for time integration errors in the tail
+        spectrum = spotter_frequency_response_correction(spectrum)
+
     return spectrum

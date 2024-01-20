@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewavespectrum",
-    version="0.0.9",
+    version="0.2.0",
     license="Apache 2 License",
     install_requires=[
         "numpy",
@@ -29,7 +29,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     author="Pieter Bart Smit",
     author_email="sofaroceangithubbot@gmail.com",
-    url="https://github.com/sofarocean/linearwavetheory.git",
+    url="https://github.com/sofarocean/oceanwavespectrum.git",
     package_dir={"": "src"},
     packages=setuptools.find_packages("src"),
     classifiers=[
