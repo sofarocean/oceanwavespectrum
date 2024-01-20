@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewavespectrum",
-    version="0.2.0",
+    version="0.2.2",
     license="Apache 2 License",
     install_requires=[
         "numpy",
@@ -17,6 +17,8 @@ setuptools.setup(
         "numba-progress",
         "pandas",
         "pdoc",
+        "requests",
+        "requests-cache",
     ],
     extras_require={
         "full": [
