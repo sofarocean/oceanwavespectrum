@@ -27,7 +27,7 @@ from roguewavespectrum._estimators.estimate import (
     Estimators,
 )
 
-from typing import TypeVar, List, Mapping, Tuple, Union
+from typing import TypeVar, List, Mapping, Tuple, Union, Type
 from xarray import Dataset, DataArray, concat, where, open_dataset
 from xarray.core.coordinates import DatasetCoordinates
 from warnings import warn
@@ -620,7 +620,7 @@ class Spectrum:
         return {dim: self.dataset[dim] for dim in self.dims_spectral}
 
     @property
-    def dims(self) -> Tuple[str]:
+    def dims(self) -> Tuple[str, ...]:
         """
         Return a tuple of the dimensions of the variance density spectrum.
 
@@ -629,7 +629,7 @@ class Spectrum:
         return tuple(str(x) for x in self._spectrum.dims)
 
     @property
-    def dims_space_time(self) -> Tuple[str]:
+    def dims_space_time(self) -> Tuple[str, ...]:
         """
         Return a tuple of the spatial and temporal dimensions of the variance density spectrum.
 
@@ -1293,6 +1293,7 @@ class Spectrum:
             overwrite=True,
         )
 
+    @property
     def wavespeed(self) -> DataArray:
         """
         Estimate the wave phase speed based on the dispersion relation. Return value is a DataArray with the same
@@ -1506,7 +1507,7 @@ class Spectrum:
         """
         Return the spectral weighted mean moment b1m defined as
 
-        .. math:: b_{2m} = \\frac{\\int_{f_{min}}^{f_{max}} b_2(f) E(f) df}{M_0}
+        $$b_{2m} = \\frac{\\int_{f_{min}}^{f_{max}} b_2(f) E(f) df}{M_0}$$
 
         :param fmin: minimum frequency, inclusive
         :param fmax: maximum frequency, inclusive
@@ -1791,7 +1792,7 @@ class Spectrum:
     # Class methods
     # ===================================================================================================================
     @classmethod
-    def from_netcdf(cls: "Spectrum", path: str, **kwargs) -> "Spectrum":
+    def from_netcdf(cls: Type["Spectrum"], path: str, **kwargs) -> "Spectrum":
         """
         Load spectrum from a netcdf file. See xarray open_dataset method for more information on use.
 
@@ -1802,7 +1803,7 @@ class Spectrum:
 
     @classmethod
     def from_dataset(
-        cls: "Spectrum", dataset: Dataset, mapping=None, deep=False
+        cls: Type["Spectrum"], dataset: Dataset, mapping=None, deep=False
     ) -> "Spectrum":
         """
         Create a spectrum object from a xarray dataset. The dataset must either contain for
@@ -1971,7 +1972,7 @@ class BuoySpectrum(Spectrum):
         return (id for id in self.keys())
 
     def keys(self) -> List[str]:
-        return list(self.dataset["unique_ids"].values)
+        return self.dataset["unique_ids"].tolist()
 
     def items(self):
         return ((id, self.sel_by_id(id)) for id in self.keys())
@@ -2005,3 +2006,27 @@ class BuoySpectrum(Spectrum):
             )
 
         return cls(dataset)
+
+    @classmethod
+    def from_dictionary(cls, spectra: Mapping[str, Spectrum]) -> "BuoySpectrum":
+        """
+        Create a BuoySpectrum object from a dictionary of spectra. The dictionary must have a key "ids" that
+        indicates the unique identifier of each spectrum.
+        :param spectra: dictionary of spectra
+        :return: BuoySpectrum object
+        """
+        from ._operations import concatenate_spectra
+
+        spectra_list = []
+        for id, spectrum in spectra.items():
+            if not isinstance(spectrum, Spectrum):
+                raise ValueError(f"Expected Spectrum object, got {type(spectrum)}")
+
+            ids = spectrum.number_of_spectra * [id]
+            spectrum.dataset["ids"] = DataArray(
+                ids, dims="time", coords={"time": spectrum.dataset["time"]}
+            )
+            spectra_list.append(spectrum)
+
+        spectra = concatenate_spectra(spectra_list)
+        return cls(spectra.dataset)

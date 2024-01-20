@@ -54,7 +54,7 @@ def create_spectrum1d(
     If only the frequency is given, but the spectrum has more than 1 dimension, the other dimensions are given default
     names "dim_0", "dim_1", etc. and given integer coordinates.
 
-    If more coordeniates than frequency are given, but the number of coordinates does not match the number of dimensions
+    If more coordinates than frequency are given, but the number of coordinates does not match the number of dimensions
     of the spectrum, a ValueError is raised.
 
     :param variance: ndarray where the trailing dimension gives variance as function of frequency
@@ -228,6 +228,112 @@ def create_spectrum2d(
         data_vars={
             NAME_E: (dims, variance_density),
             NAME_DEPTH: (dims[:-2], depth),
+        },
+        coords=coords,
+    )
+    return Spectrum(dataset, **kwargs)
+
+
+def create_buoyspectrum(
+    coordinates: Union[
+        np.ndarray, tuple[str, np.ndarray], Sequence[tuple[str, np.ndarray]]
+    ],
+    variance_density: np.ndarray,
+    a1: np.ndarray,
+    b1: np.ndarray,
+    a2: np.ndarray,
+    b2: np.ndarray,
+    **kwargs,
+) -> Spectrum:
+    """
+    Create a roguewavespectrum.Spectrum1D object for a given 1D spectrum with a1/b1/a2/b2.
+
+    :param coordinates:  A list of coordinates naming the dimension and giving the coordinate values. For a 1D spectrum
+    that has dimensions [dim1,...,dimN,frequency] The list should take the form:
+
+        [(dim1, np.ndarray), (dim2, np.ndarray), ..., (dimN, np.ndarray), ("frequency", np.ndarray)]
+
+    Note that the frequency coordinate is required, and MUST be the last coordinate.
+
+    For convinience, if a numpy array is given, it is assumed that the array contains the frequency coordinates, and the
+    coordinate is implicitly assumed to be [("frequency", coordinates)].
+
+    If only the frequency is given, but the spectrum has more than 1 dimension, the other dimensions are given default
+    names "dim_0", "dim_1", etc. and given integer coordinates.
+
+    If more coordeniates than frequency are given, but the number of coordinates does not match the number of dimensions
+    of the spectrum, a ValueError is raised.
+
+    :param variance: ndarray where the trailing dimension gives variance as function of frequency
+    :param a1: ndarray where the trailing dimension gives a1 as function of frequency
+    :param b1: ndarray where the trailing dimension gives b1 as function of frequency
+    :param a2: ndarray where the trailing dimension gives a2 as function of frequency
+    :param b2: ndarray where the trailing dimension gives b2 as function of frequency
+    :param kwargs:
+    :return: spectrum object
+    """
+
+    if isinstance(coordinates, np.ndarray):
+        coordinates = [(NAME_F, coordinates)]
+
+    if isinstance(coordinates[0], str):
+        coordinates = [coordinates]
+
+    elif not isinstance(coordinates, Sequence):
+        raise ValueError(
+            "coordinates should be a numpy array or a sequence of tuples describing the coordinates"
+        )
+
+    if not (a1.shape == b1.shape == a2.shape == b2.shape == variance_density.shape):
+        raise ValueError("a1,b1,a2,b2 and variance_density should have the same shape")
+
+    if not coordinates[-1][0] == "frequency":
+        raise ValueError("The last coordinate should be frequency")
+
+    if len(coordinates) < variance_density.ndim:
+        if len(coordinates) == 1:
+            coordinates = [
+                (f"dim_{ndim}", np.arange(variance_density.shape[ndim]))
+                for ndim in range(variance_density.ndim - 1)
+            ] + coordinates
+        else:
+            raise ValueError(
+                "The number of coordinates should match the number of dimensions of the variance_density"
+            )
+
+    dims = [x[0] for x in coordinates]
+    coords = {x[0]: x[1] for x in coordinates}
+
+    if len(dims) != variance_density.ndim:
+        raise ValueError(
+            "The number of coordinates should match the number of dimensions of the variance_density"
+        )
+
+    shape = variance_density.shape
+    for index, dim in enumerate(dims):
+        coor = coords[dim]
+        if not isinstance(coor, np.ndarray):
+            raise ValueError(
+                f"Coordinate number {index} associated with {dim} should be a numpy array"
+            )
+
+        if len(coor) != shape[index]:
+            raise ValueError(
+                f"Size of coordinate number {index} associated with {dim} does not match the shape of the "
+                f"variance_density {shape}"
+            )
+    depth = kwargs.get("depth", np.inf)
+    if np.isscalar(depth):
+        depth = np.zeros(variance_density.shape[:-1]) + depth
+
+    dataset = Dataset(
+        data_vars={
+            NAME_e: (dims, variance_density),
+            NAME_a1: (dims, a1),
+            NAME_b1: (dims, b1),
+            NAME_a2: (dims, a2),
+            NAME_b2: (dims, b2),
+            NAME_DEPTH: (dims[:-1], depth),
         },
         coords=coords,
     )

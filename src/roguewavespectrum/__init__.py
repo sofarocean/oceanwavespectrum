@@ -302,6 +302,16 @@ class method on the  Spectrum class.
 WARNING: cf_convensions are _implemented_, but presently not well tested outside of the package itself (i.e. things are
 internally consistent, but errors may still exist in naming convention).
 
+... get data from the Sofar Wavefleet API:
+------------------------------------------
+For this we use the `roguewavespectrum.spotter.SofarFleet` class. This class is a thin wrapper around the Sofar
+Wavefleet API. For details see the documentation of the spotter module in `roguewavespectrum.spotter`.
+
+... read spectral data from the csv files produced by the spotter sd-card parser:
+------------------------------------------
+For this we use the `roguewavespectrum.spotter.read_spectral_csv` function. For details see the documentation of the
+spotter module in `roguewavespectrum.spotter`.
+
 References
 ==========
 
@@ -309,6 +319,9 @@ References
 
     Kuik, A. J., Van Vledder, G. P., & Holthuijsen, L. H. (1988). A method for the routine analysis of pitch-and-roll
     buoy wave data. Journal of physical oceanography, 18(7), 1020-1034.
+
+Classes/Functions
+=================
 
 """
 # Some import shananigans to make sure pydoc documents these imports without having to expose the private package.
@@ -331,6 +344,5 @@ create_spectrum1d = _create_spectrum1d
 create_spectrum2d = _create_spectrum2d
 create_parametric_spectrum1d = _create_parametric_spectrum1d
 create_parametric_spectrum2d = _create_parametric_spectrum2d
-
 Spectrum = _Spectrum
 BuoySpectrum = _BuoySpectrum
