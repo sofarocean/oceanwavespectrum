@@ -1293,6 +1293,7 @@ class Spectrum:
             overwrite=True,
         )
 
+    @property
     def wavespeed(self) -> DataArray:
         """
         Estimate the wave phase speed based on the dispersion relation. Return value is a DataArray with the same
@@ -2005,3 +2006,27 @@ class BuoySpectrum(Spectrum):
             )
 
         return cls(dataset)
+
+    @classmethod
+    def from_dictionary(cls, spectra: Mapping[str, Spectrum]) -> "BuoySpectrum":
+        """
+        Create a BuoySpectrum object from a dictionary of spectra. The dictionary must have a key "ids" that
+        indicates the unique identifier of each spectrum.
+        :param spectra: dictionary of spectra
+        :return: BuoySpectrum object
+        """
+        from ._operations import concatenate_spectra
+
+        spectra_list = []
+        for id, spectrum in spectra.items():
+            if not isinstance(spectrum, Spectrum):
+                raise ValueError(f"Expected Spectrum object, got {type(spectrum)}")
+
+            ids = spectrum.number_of_spectra * [id]
+            spectrum.dataset["ids"] = DataArray(
+                ids, dims="time", coords={"time": spectrum.dataset["time"]}
+            )
+            spectra_list.append(spectrum)
+
+        spectra = concatenate_spectra(spectra_list)
+        return cls(spectra.dataset)
