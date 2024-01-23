@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewavespectrum",
-    version="0.2.2",
+    version="0.2.3",
     license="Apache 2 License",
     install_requires=[
         "numpy",
@@ -19,6 +19,7 @@ setuptools.setup(
         "pdoc",
         "requests",
         "requests-cache",
+        "matplotlib",
     ],
     extras_require={
         "full": [
