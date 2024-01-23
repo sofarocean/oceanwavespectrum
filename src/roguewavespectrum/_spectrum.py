@@ -1928,8 +1928,8 @@ class BuoySpectrum(Spectrum):
         """
         Create a spectrum object from a xarray dataset. In addition to the requirements of the Spectrum class, the
         dataset must contain a leading index coordinate, and contain the variable "ids" that for each index indicates
-        the buoy (or observation platforms) unique identifier. The unique identifiers are used to select spectra by
-        buoy identifier.
+        the buoy (or observation platforms) unique integer identifier. The `id_to_label` variable is used to map the
+        integer ids to a label.
 
         Example 1D dataset:
         ```python
@@ -1944,8 +1944,9 @@ class BuoySpectrum(Spectrum):
                 "latitude": (["index"], latitude),
                 "longitude": (["index"], longitude),
                 "ids": (["index"], ids),
+                "id_to_label": (["spotter_labels"], id_to_label),
             },
-            coords={"frequency": frequency,"index": index},
+            coords={"frequency": frequency,"index": index, "spotter_labels": spotter_labels},
         ```
 
         :param dataset: Dataset containing the spectral data.
@@ -2045,7 +2046,12 @@ class BuoySpectrum(Spectrum):
             )
         return cls(dataset)
 
-    def is_in_region(self, polygon):
+    def is_in_region(self, polygon) -> DataArray:
+        """
+        Return a mask indicating whether the location of each spectrum is within the given polygon.
+        :param polygon: A polygon defined by a list of (lat, lon) tuples.
+        :return: boolean mask as DataArray
+        """
 
         if isinstance(polygon, (tuple, List)):
             polygon = np.array(polygon)
@@ -2059,7 +2065,13 @@ class BuoySpectrum(Spectrum):
             coords={"index": self.dataset["index"]},
         )
 
-    def is_in_timerange(self, start_time, end_time):
+    def is_in_timerange(self, start_time, end_time) -> DataArray:
+        """
+        Return a mask indicating whether the time of each spectrum is within the given time range.
+        :param start_time: time stamp - any valid input to pd.Timestamp
+        :param end_time: time stamp - any valid input to pd.Timestamp
+        :return: boolean mask as DataArray
+        """
         start_time = pd.Timestamp(start_time)
         end_time = pd.Timestamp(end_time)
 
@@ -2069,15 +2081,34 @@ class BuoySpectrum(Spectrum):
             coords={"index": self.dataset["index"]},
         )
 
-    def select_by_region(self, polygon):
+    def select_by_region(self, polygon) -> "BuoySpectrum":
+        """
+        Return a filtered subset of all spectra that have positions within the given polygon.
+        :param polygon: A polygon defined by a list of (lat, lon) tuples.
+        :return: boolean mask as DataArray
+        """
         mask = self.is_in_region(polygon)
         return self.where(mask)
 
-    def select_by_time(self, start_time, end_time):
+    def select_by_time(self, start_time, end_time) -> "BuoySpectrum":
+        """
+        Return a filtered subset of all spectra that have timestamps within the given time range.
+        :param start_time: time stamp - any valid input to pd.Timestamp
+        :param end_time: time stamp - any valid input to pd.Timestamp
+        :return: BuoySpectrum object
+        """
         mask = self.is_in_timerange(start_time, end_time)
         return self.where(mask)
 
     def select_by_time_and_region(self, start_time, end_time, polygon):
+        """
+        Return a filtered subset of all spectra that have timestamps within the given time range, and positions within
+        the given polygon.
+        :param start_time: time stamp - any valid input to pd.Timestamp
+        :param end_time: time stamp - any valid input to pd.Timestamp
+        :param polygon: A polygon defined by a list of (lat, lon) tuples.
+        :return: BuoySpectrum object
+        """
         mask = self.is_in_timerange(start_time, end_time) & self.is_in_region(polygon)
         return self.where(mask)
 
