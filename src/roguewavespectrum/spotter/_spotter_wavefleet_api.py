@@ -359,10 +359,11 @@ class SofarFleet:
         parallel = kwargs.get("parallel", True)
         num_threads = kwargs.get("num_threads", 10)
         display_progress_bar = kwargs.get("display_progress_bar", True)
+        post_process = kwargs.get("post_process", True)
 
         def _worker(spotter: SofarSpotter):
             try:
-                data = spotter.get_spectrum(start_date, end_date, **kwargs)
+                data = spotter.get_spectrum(start_date, end_date, post_process=False)
             except ExceptionNoDataForVariable:
                 data = None
             return data
@@ -389,11 +390,20 @@ class SofarFleet:
                 )
             )
 
-        data = {
-            spotter.spotter_id: spectra
-            for spotter, spectra in zip(_input, output)
-            if spectra is not None
-        }
+        data = {}
+        for spotter, spectra in tqdm.tqdm(
+            zip(_input, output),
+            desc="Processing spectra",
+            total=len(_input),
+            disable=not display_progress_bar,
+        ):
+            if spectra is None:
+                continue
+            else:
+                if post_process:
+                    spectra = post_process_api_spectrum(spectra)
+                data[spotter.spotter_id] = spectra
+
         return BuoySpectrum.from_dictionary(data)
 
 
@@ -472,6 +482,7 @@ def _to_spectrum(api_data: List[dict], post_process) -> Spectrum:
         },
     )
     spectrum = Spectrum(dataset)
+
     if post_process:
         spectrum = post_process_api_spectrum(spectrum)
     return spectrum

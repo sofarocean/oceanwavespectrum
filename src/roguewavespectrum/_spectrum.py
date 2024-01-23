@@ -1,11 +1,13 @@
 import typing
 
 import numpy as np
+import pandas as pd
 from linearwavetheory import (
     inverse_intrinsic_dispersion_relation,
     intrinsic_group_speed,
     intrinsic_phase_speed,
 )
+from roguewavespectrum._geospatial import contains
 from roguewavespectrum._time import to_datetime64
 from roguewavespectrum._physical_constants import (
     PHYSICSOPTIONS,
@@ -54,6 +56,7 @@ from ._variable_names import (
 )
 
 from ._spline_interpolation import cumulative_frequency_interpolation_1d_variable
+
 
 _T = TypeVar("_T")
 _number_or_dataarray = TypeVar("_number_or_dataarray", DataArray, Number)
@@ -569,9 +572,13 @@ class Spectrum:
         """
         dataset = Dataset()
         for var in self.dataset:
-            data = self.dataset[var].where(
-                condition.reindex_like(self.dataset[var]), drop=True
-            )
+            try:
+                # If the condition is defined on a dimension that does not exist in the variable this may error.
+                data = self.dataset[var].where(
+                    condition.reindex_like(self.dataset[var]), drop=True
+                )
+            except ValueError:
+                data = self.dataset[var]
             dataset = dataset.assign({var: data})
 
         return self.__class__(dataset)
@@ -1071,7 +1078,6 @@ class Spectrum:
             )
         return self.dataset[NAME_E]
 
-    @property
     def mean_direction_per_frequency(
         self,
         directional_unit: DirectionalUnit = "degree",
@@ -1096,7 +1102,6 @@ class Spectrum:
             self.a1, self.b1, directional_unit, directional_convention, "direction"
         )
 
-    @property
     def mean_spread_per_frequency(
         self, directional_unit: DirectionalUnit = "degree"
     ) -> DataArray:
@@ -1786,6 +1791,17 @@ class Spectrum:
         :param path: path or path-like location to save the spectrum to.
         :return: None
         """
+
+        # We need to clear the following attributes if given as xarray adds these automatically:
+        attr_to_clear = ["missing_value"]
+        for key in self.dataset:
+            for value in attr_to_clear:
+                _ = self.dataset[key].attrs.pop(value, None)
+
+        for key in self.dataset.coords:
+            for value in attr_to_clear:
+                _ = self.dataset[key].attrs.pop(value, None)
+
         return self.dataset.to_netcdf(path, **kwargs)
 
     # ===================================================================================================================
@@ -1948,9 +1964,22 @@ class BuoySpectrum(Spectrum):
                 "spectral observation"
             )
 
-        if "unique_ids" not in dataset.coords:
-            ids = np.unique(dataset["ids"])
-            self.dataset = self.dataset.assign_coords(unique_ids=ids)
+        if "id_to_label" not in dataset:
+            raise ValueError(
+                "Buoy spectrum requires a dataset with the 'id_to_label' variable that indicates the mapping from"
+                "the id to the label"
+            )
+
+        # Only retain id_to_label data and spotter_labels coordinates for those that exist in the dataset
+        mask = DataArray(
+            data=np.isin(self.dataset["id_to_label"], self.dataset["ids"]),
+            dims="spotter_labels",
+            coords={"spotter_labels": self.dataset["spotter_labels"]},
+        )
+        _tmp = self.dataset["id_to_label"].where(mask, drop=True)
+        self.dataset = self.dataset.drop_vars("id_to_label")
+        self.dataset = self.dataset.drop_vars("spotter_labels")
+        self.dataset["id_to_label"] = _tmp
 
     def sel_by_id(self: "BuoySpectrum", item: str) -> "BuoySpectrum":
         """
@@ -1958,7 +1987,8 @@ class BuoySpectrum(Spectrum):
         :param item: identifier of the spectra to select.
         :return: Spectrum object with the selected spectra.
         """
-        spectrum = self.where(self.dataset["ids"] == item)
+        _id = self.dataset["id_to_label"].sel(spotter_labels=item).values
+        spectrum = self.where(self.dataset["ids"] == _id)
         dataset = spectrum.dataset.swap_dims({"index": "time"})
         return self.__class__(dataset)
 
@@ -1972,7 +2002,7 @@ class BuoySpectrum(Spectrum):
         return (id for id in self.keys())
 
     def keys(self) -> List[str]:
-        return self.dataset["unique_ids"].tolist()
+        return self.dataset["spotter_labels"].values.tolist()
 
     def items(self):
         return ((id, self.sel_by_id(id)) for id in self.keys())
@@ -1994,9 +2024,18 @@ class BuoySpectrum(Spectrum):
             rowsizes = dataset["rowsize"].values
             labels = []
             for ordinal_index, rowsize in enumerate(rowsizes):
-                labels += rowsize * [trajectory[ordinal_index]]
+                labels += (
+                    np.ones(rowsize) * ordinal_index
+                ).tolist()  # rowsize * [trajectory[ordinal_index]]
 
             dataset = dataset.assign({"ids": ("index", labels)})
+
+            id_to_label = DataArray(
+                [x for x in range(len(trajectory))],
+                dims="spotter_labels",
+                coords={"spotter_labels": trajectory},
+            )
+            dataset = dataset.assign({"id_to_label": id_to_label})
             dataset = dataset.drop_vars(["trajectory", "rowsize"])
 
         else:
@@ -2004,8 +2043,43 @@ class BuoySpectrum(Spectrum):
                 "creating GroupedFrequencySpectrum from a trajectory dataset requires trajectory "
                 "information"
             )
-
         return cls(dataset)
+
+    def is_in_region(self, polygon):
+
+        if isinstance(polygon, (tuple, List)):
+            polygon = np.array(polygon)
+
+        lat = self.latitude.values
+        lon = self.longitude.values
+
+        return DataArray(
+            contains(lat, lon, polygon),
+            dims="index",
+            coords={"index": self.dataset["index"]},
+        )
+
+    def is_in_timerange(self, start_time, end_time):
+        start_time = pd.Timestamp(start_time)
+        end_time = pd.Timestamp(end_time)
+
+        return DataArray(
+            (self.time >= start_time) & (self.time <= end_time),
+            dims="index",
+            coords={"index": self.dataset["index"]},
+        )
+
+    def select_by_region(self, polygon):
+        mask = self.is_in_region(polygon)
+        return self.where(mask)
+
+    def select_by_time(self, start_time, end_time):
+        mask = self.is_in_timerange(start_time, end_time)
+        return self.where(mask)
+
+    def select_by_time_and_region(self, start_time, end_time, polygon):
+        mask = self.is_in_timerange(start_time, end_time) & self.is_in_region(polygon)
+        return self.where(mask)
 
     @classmethod
     def from_dictionary(cls, spectra: Mapping[str, Spectrum]) -> "BuoySpectrum":
@@ -2018,15 +2092,25 @@ class BuoySpectrum(Spectrum):
         from ._operations import concatenate_spectra
 
         spectra_list = []
-        for id, spectrum in spectra.items():
+
+        _id = 0
+        for _, spectrum in spectra.items():
             if not isinstance(spectrum, Spectrum):
                 raise ValueError(f"Expected Spectrum object, got {type(spectrum)}")
 
-            ids = spectrum.number_of_spectra * [id]
             spectrum.dataset["ids"] = DataArray(
-                ids, dims="time", coords={"time": spectrum.dataset["time"]}
+                np.full((spectrum.number_of_spectra,), _id, dtype="int32"),
+                dims="time",
+                coords={"time": spectrum.dataset["time"]},
             )
             spectra_list.append(spectrum)
+            _id += 1
 
-        spectra = concatenate_spectra(spectra_list)
-        return cls(spectra.dataset)
+        dataset = concatenate_spectra(spectra_list).dataset
+        keys = list(spectra.keys())
+        dataset["id_to_label"] = DataArray(
+            [x for x in range(len(keys))],
+            dims="spotter_labels",
+            coords={"spotter_labels": keys},
+        )
+        return cls(dataset)

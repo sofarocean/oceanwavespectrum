@@ -19,6 +19,7 @@ setuptools.setup(
         "pdoc",
         "requests",
         "requests-cache",
+        "matplotlib",
     ],
     extras_require={
         "full": [
