@@ -285,7 +285,11 @@ class Spectrum:
         for x in self.dataset:
             if x in SPECTRAL_VARS:
                 continue
-            data[x] = (self.dims_space_time, self.dataset[x].values)
+
+            if len(self.dims_space_time) == 0:
+                data[x] = self.dataset[x].values
+            else:
+                data[x] = (self.dims_space_time, self.dataset[x].values)
 
         return Spectrum(
             Dataset(data_vars=data, coords=coords),
@@ -561,7 +565,10 @@ class Spectrum:
     def sel(self: "Spectrum", *args, **kwargs) -> "Spectrum":
         dataset = Dataset()
         for var in self.dataset:
-            dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
+            try:
+                dataset = dataset.assign({var: self.dataset[var].sel(*args, **kwargs)})
+            except KeyError:
+                dataset = dataset.assign({var: self.dataset[var]})
         return self.__class__(dataset=dataset)
 
     def where(self: "Spectrum", condition: DataArray) -> "Spectrum":
