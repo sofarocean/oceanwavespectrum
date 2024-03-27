@@ -479,7 +479,7 @@ def test_mean_direction_per_frequency():
     dir_per_freq[:, 0:2] = nan
     for spec in specs:
         helper_assert(
-            spec.mean_direction_per_frequency,
+            spec.mean_direction_per_frequency(),
             ["time", "frequency"],
             (4, 100),
             dir_per_freq,
@@ -492,7 +492,7 @@ def test_mean_spread_per_frequency():
     spread_per_freq[:, 0:2] = nan
     for spec in specs:
         helper_assert(
-            spec.mean_spread_per_frequency,
+            spec.mean_spread_per_frequency(),
             ["time", "frequency"],
             (4, 100),
             spread_per_freq,

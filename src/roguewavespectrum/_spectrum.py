@@ -1900,6 +1900,12 @@ def _bandpass(
 
         return data.isel({dim: _range})
 
+    if _min < coord.values[0]:
+        _min = coord.values[0]
+
+    if _max > coord.values[-1]:
+        _max = coord.values[-1]
+
     _range = (coord.values > _min) & (coord.values < _max)
     coords = coord[_range]
 
