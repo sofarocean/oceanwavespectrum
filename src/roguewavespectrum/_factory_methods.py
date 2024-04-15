@@ -17,7 +17,7 @@ from roguewavespectrum._variable_names import (
 
 import numpy as np
 from xarray import Dataset
-from typing import Union, Sequence, Literal
+from typing import Union, Sequence, Literal, Optional
 from roguewavespectrum.parametric import (
     create_dir_shape,
     create_freq_shape,
@@ -32,10 +32,10 @@ def create_spectrum1d(
         np.ndarray, tuple[str, np.ndarray], Sequence[tuple[str, np.ndarray]]
     ],
     variance_density: np.ndarray,
-    a1: np.ndarray,
-    b1: np.ndarray,
-    a2: np.ndarray,
-    b2: np.ndarray,
+    a1: Optional[np.ndarray] = None,
+    b1: Optional[np.ndarray] = None,
+    a2: Optional[np.ndarray] = None,
+    b2: Optional[np.ndarray] = None,
     **kwargs,
 ) -> Spectrum:
     """
@@ -77,9 +77,6 @@ def create_spectrum1d(
             "coordinates should be a numpy array or a sequence of tuples describing the coordinates"
         )
 
-    if not (a1.shape == b1.shape == a2.shape == b2.shape == variance_density.shape):
-        raise ValueError("a1,b1,a2,b2 and variance_density should have the same shape")
-
     if not coordinates[-1][0] == "frequency":
         raise ValueError("The last coordinate should be frequency")
 
@@ -93,6 +90,18 @@ def create_spectrum1d(
             raise ValueError(
                 "The number of coordinates should match the number of dimensions of the variance_density"
             )
+
+    if (a1 is None) or (b1 is None) or (a2 is None) or (b2 is None):
+        if not ((a1 is None) and (b1 is None) and (a2 is None) and (b2 is None)):
+            raise ValueError("a1,b1,a2,b2 should all be None or all be numpy arrays")
+
+        a1 = np.ones_like(variance_density)
+        b1 = np.zeros_like(variance_density)
+        a2 = np.ones_like(variance_density)
+        b2 = np.zeros_like(variance_density)
+
+    if not (a1.shape == b1.shape == a2.shape == b2.shape == variance_density.shape):
+        raise ValueError("a1,b1,a2,b2 and variance_density should have the same shape")
 
     dims = [x[0] for x in coordinates]
     coords = {x[0]: x[1] for x in coordinates}
