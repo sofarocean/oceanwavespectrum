@@ -465,7 +465,7 @@ def spline_peak_frequency(
         # Because the interpolator returns values at the current roots evaluated at _all_ spectra, we still have to
         # select the values at the spectrum of interest. This implementation is silly, adds computational costs, and can
         # probably be improved. It seems "fast enough" so that I'll punt that to another time.
-        if len(list_of_roots_for_all_spectra) > 1:
+        if frequency_spectrum.ndim > 1:
             values_at_roots = values_at_roots[index, :]
 
         _root = root[np.isfinite(values_at_roots)]
