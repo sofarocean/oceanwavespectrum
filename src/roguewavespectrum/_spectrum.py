@@ -1361,6 +1361,9 @@ class Spectrum:
         """
         return set_conventions(4 * np.sqrt(self.m0(fmin, fmax)), "Hm0", overwrite=True)
 
+    def significant_waveheight(self, fmin=0, fmax=np.inf) -> DataArray:
+        return self.hm0(fmin, fmax)
+
     def hrms(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
         Root mean square wave height estimated from the spectrum.

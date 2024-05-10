@@ -41,7 +41,7 @@ become maintainers.
 
 How well is this package tested?
 --------------------------------
-The package contains a number of unit tests, but those mostly test if the code runs, and if the code is consitent
+The package contains a number of unit tests, but those mostly test if the code runs, and if the code is consistent
 with previous behaviour, not if the code is correct. Most of these routines have been in use in
 my own work and calculations are based on well established theory.
 
