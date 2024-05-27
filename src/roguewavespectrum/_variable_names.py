@@ -424,6 +424,23 @@ cf_conventions = {
         "missing_value": np.NAN,
         "valid_min": 0,
     },
+    "third_order_moment_surface_elevation": {
+        # Not an official cf-standard name
+        "units": "m^3",
+        "long_name": "sea_surface_third_order_moment",
+        "missing_value": np.NAN,
+        "valid_min": -100,
+        "valid_max": 100,
+        "comment": "Moment estimated based on second-order perturbation theory",
+    },
+    "wave_skewness": {
+        # Not an official cf-standard name
+        "long_name": "sea_surface_wave_skewness",
+        "missing_value": np.NAN,
+        "valid_min": -5,
+        "valid_max": 5,
+        "comment": "Skewness estimated based on second-order perturbation theory",
+    },
 }
 
 

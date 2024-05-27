@@ -677,3 +677,32 @@ def test_wavenumber_directional_spectral_density():
     specs = helper_create_spectra(4)
     spec = specs[0]
     _ = spec.wavenumber_directional_spectral_density
+
+
+def test_third_order_moment_surface_elevation():
+    specs = helper_create_spectra(4)
+    _canary_values = [0.00436271, 0.01378833, 0.03366291, 0.06980341]
+    for spec in specs:
+        if spec.is_1d:
+            try:
+                skewness = spec.third_order_moment_surface_elevation()
+            except ValueError:
+                continue
+        else:
+            skewness = spec.third_order_moment_surface_elevation()
+
+        assert_allclose(skewness, _canary_values, atol=1e-4, rtol=1e-4)
+
+
+def test_skewness():
+    specs = helper_create_spectra(4)
+    _canary_values = [0.03490171, 0.04653561, 0.05816951, 0.06980341]
+    for spec in specs:
+        if spec.is_1d:
+            try:
+                skewness = spec.skewness_surface_elevation()
+            except ValueError:
+                continue
+        else:
+            skewness = spec.skewness_surface_elevation()
+        assert_allclose(skewness, _canary_values, atol=1e-4, rtol=1e-4)

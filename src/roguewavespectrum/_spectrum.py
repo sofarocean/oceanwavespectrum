@@ -7,6 +7,8 @@ from linearwavetheory import (
     intrinsic_group_speed,
     intrinsic_phase_speed,
 )
+from linearwavetheory.stokes_theory import surface_elevation_skewness
+
 from roguewavespectrum._geospatial import contains
 from roguewavespectrum._time import to_datetime64
 from roguewavespectrum._physical_constants import (
@@ -1750,6 +1752,51 @@ class Spectrum:
         """
         return set_conventions(
             self.m0(fmin, fmax) / self.m1(fmin, fmax), "mean_period", overwrite=True
+        )
+
+    def third_order_moment_surface_elevation(self) -> DataArray:
+        """
+        Skewness of the spectrum, defined as the third moment normalized by the variance.
+
+        :param fmin: minimum frequency, inclusive
+        :param fmax: maximum frequency, inclusive
+        :return: skewness
+        """
+        if self.is_1d:
+            raise ValueError("Skewness can only be estimated for 2D spectra")
+
+        # Construct the output coordinates and dimension of the data array
+        coords = {}
+        for dim in self.dims_space_time:
+            coords[dim] = self.dataset[dim].values
+
+        moment = DataArray(
+            data=surface_elevation_skewness(
+                self.frequency.values,
+                self.direction().values,
+                self.directional_variance_density.values,
+                self.depth.values,
+                _as_physicsoptions_lwt(self._physics_options),
+            ),
+            dims=self.dims_space_time,
+            coords=coords,
+        )
+        return set_conventions(
+            moment, "third_order_moment_surface_elevation", overwrite=True
+        )
+
+    def skewness_surface_elevation(self) -> DataArray:
+        """
+        Skewness of the spectrum, defined as the third moment normalized by the variance.
+
+        :param fmin: minimum frequency, inclusive
+        :param fmax: maximum frequency, inclusive
+        :return: skewness
+        """
+        return set_conventions(
+            self.third_order_moment_surface_elevation() / np.sqrt(self.m0() ** 3),
+            "wave_skewness",
+            overwrite=True,
         )
 
     def energy_period(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:

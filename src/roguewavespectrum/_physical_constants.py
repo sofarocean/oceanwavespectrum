@@ -89,7 +89,7 @@ def _as_physicsoptions_lwt(physicsoptions: PhysicsOptions) -> lwt.PhysicsOptions
     :param physicsoptions: PhysicsOptions object
     :return: PhysicsOptionsLWT object
     """
-    return lwt.PhysicsOptions(
+    return lwt.physics_options(
         kinematic_surface_tension=physicsoptions.kinematic_surface_tension,
         grav=physicsoptions.gravity,
         wave_type=physicsoptions.wave_type,
