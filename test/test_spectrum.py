@@ -706,3 +706,13 @@ def test_skewness():
         else:
             skewness = spec.skewness_surface_elevation()
         assert_allclose(skewness, _canary_values, atol=1e-4, rtol=1e-4)
+
+
+def test_ursell():
+    specs = helper_create_spectra(4)
+
+    _canary_values = [0.65625939, 0.87501251, 1.09376564, 1.31251877]
+    for spec in specs:
+        spec.depth = 5
+        ursell = spec.ursell_number()
+        assert_allclose(ursell, _canary_values, atol=1e-4, rtol=1e-4)
