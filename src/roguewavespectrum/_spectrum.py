@@ -1756,7 +1756,17 @@ class Spectrum:
 
     def third_order_moment_surface_elevation(self) -> DataArray:
         """
-        Skewness of the spectrum, defined as the third moment normalized by the variance.
+        Third order moment ("skewness") of the surface elevation associated with the spectrum defined as $E[\\eta^3]$,
+        where $\\eta$ is the zero mean surface elevation, and $E[\\ldots]$ is the expectation operator.
+
+        The third-order moment is estimated from finite depth theory (e.g. Herbers & Janssen, 2016) as implemented in
+        the `linearwavetheory` package. It is assumed the Ursell number is small.
+
+        The skewness can only be calculated for 2D spectra. Convert to a 2D spectrum using the
+        `as_frequency_direction_spectrum` method if need be.
+
+        Herbers, T. H. C., & Janssen, T. T. (2016). Lagrangian surface wave motion and Stokes drift fluctuations.
+        Journal of Physical Oceanography, 46(4), 1009-1021.
 
         :param fmin: minimum frequency, inclusive
         :param fmax: maximum frequency, inclusive
@@ -1787,7 +1797,21 @@ class Spectrum:
 
     def skewness_surface_elevation(self) -> DataArray:
         """
-        Skewness of the spectrum, defined as the third moment normalized by the variance.
+        Skewness of the surface elevation associated with the spectrum. Defined as
+
+        $$\\text{Sk} = \\frac{E[\\eta^3]}{m_0^{3/2}}$$
+
+        where $\\eta$ is the zero mean surface elevation, $E[\\ldots]$ is the expectation operator, and $m_0$ is the
+        zeroth frequency moment of the spectrum.
+
+        The third-order moment $E[\\eta^3]$ is estimated from finite depth theory (e.g. Herbers & Janssen, 2016) as
+        implemented in the `linearwavetheory`  package. It is assumed the Ursell number is small.
+
+        The skewness can only be calculated for 2D spectra. Convert to a 2D spectrum using the
+        `as_frequency_direction_spectrum` method if need be.
+
+        Herbers, T. H. C., & Janssen, T. T. (2016). Lagrangian surface wave motion and Stokes drift fluctuations.
+        Journal of Physical Oceanography, 46(4), 1009-1021.
 
         :param fmin: minimum frequency, inclusive
         :param fmax: maximum frequency, inclusive
@@ -1809,6 +1833,36 @@ class Spectrum:
         """
         return set_conventions(
             self.m1(fmin, fmax) / self.m0(fmin, fmax), "energy_period", overwrite=True
+        )
+
+    def ursell_number(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+        """
+        Ursell number of the wave spectrum. The Ursell number is a measure of the shallow water-nonlinearity of the wave
+        field which we define here as
+
+        $$Ur = \\frac{\\delta}{\\mu^2}$$
+
+        where $\\delta$ is the shallow water nonlinearity parameter and $\\mu$ is the relative depth. Here we estimate
+        the shallow water nonlinearity parameter from the spectrum as
+
+        $$\\delta = \\frac{a}{d} = \\frac{H_{rms}}{2d}$$
+
+        where $H_{rms}$ is the root-mean-square wave-height, $d$ is the water depth. Furthermore, the relative depth is
+        defined as
+
+        $$\\mu = d k_{p}$$
+
+        :param fmin: minimum frequency, inclusive
+        :param fmax: maximum frequency, inclusive
+        :return: Ursell number
+        """
+        shallow_water_nonlinearity = self.hrms(fmin, fmax) / self.depth / 2.0
+        relative_depth = self.depth * self.peak_wavenumber(fmin, fmax)
+
+        return set_conventions(
+            shallow_water_nonlinearity / relative_depth**2,
+            "ursell_number",
+            overwrite=True,
         )
 
     def zero_crossing_period(

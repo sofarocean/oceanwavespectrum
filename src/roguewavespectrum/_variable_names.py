@@ -441,6 +441,13 @@ cf_conventions = {
         "valid_max": 5,
         "comment": "Skewness estimated based on second-order perturbation theory",
     },
+    "ursell_number": {
+        # Not an official cf-standard name
+        "long_name": "ursell_number",
+        "missing_value": np.NAN,
+        "valid_min": 0,
+        "comment": "Ursell number",
+    },
 }
 
 
