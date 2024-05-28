@@ -9,6 +9,7 @@ from linearwavetheory import (
 )
 from linearwavetheory.stokes_theory import surface_elevation_skewness
 
+from numba_progress import ProgressBar
 from roguewavespectrum._geospatial import contains
 from roguewavespectrum._time import to_datetime64
 from roguewavespectrum._physical_constants import (
@@ -1780,14 +1781,25 @@ class Spectrum:
         for dim in self.dims_space_time:
             coords[dim] = self.dataset[dim].values
 
-        moment = DataArray(
-            data=surface_elevation_skewness(
+        if self.number_of_spectra < 10:
+            disable = True
+        else:
+            disable = False
+
+        with ProgressBar(
+            total=self.number_of_spectra, disable=disable, desc="Calculating skewness"
+        ) as progress_bar:
+            skewness = surface_elevation_skewness(
                 self.frequency.values,
                 self.direction().values,
-                self.directional_variance_density.values,
+                np.ascontiguousarray(self.directional_variance_density.values),
                 self.depth.values,
                 _as_physicsoptions_lwt(self._physics_options),
-            ),
+                progress_bar,
+            )
+
+        moment = DataArray(
+            data=skewness,
             dims=self.dims_space_time,
             coords=coords,
         )
