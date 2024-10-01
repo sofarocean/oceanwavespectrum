@@ -1930,6 +1930,16 @@ class Spectrum:
 
         return self.dataset.to_netcdf(path, **kwargs)
 
+    def save_as_netcdf(self, path: str, **kwargs):
+        """
+        Save the spectrum to a netcdf file. See xarray to_netcdf method for more information on use. Deprecated, use
+        to_netcdf instead.
+
+        :param path: path or path-like location to save the spectrum to.
+        :return: None
+        """
+        return self.to_netcdf(path, **kwargs)
+
     # ===================================================================================================================
     # Class methods
     # ===================================================================================================================
