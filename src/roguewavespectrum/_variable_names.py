@@ -283,6 +283,12 @@ cf_conventions = {
         "missing_value": np.NAN,
         "valid_min": 0,
     },
+    "directional_slope_spectrum": {
+        "units": "1/Hz/rad",
+        "long_name": "Directional slope spectrum",
+        "missing_value": np.NAN,
+        "valid_min": 0,
+    },
     "mean_squared_slope": {
         "long_name": "Mean squared slope",
         "missing_value": np.NAN,

@@ -289,6 +289,8 @@ class Spectrum:
 
             if len(self.dims_space_time) == 0:
                 data[x] = self.dataset[x].values
+            elif x == "id_to_label":
+                data[x] = self.dataset[x].values
             else:
                 data[x] = (self.dims_space_time, self.dataset[x].values)
 
@@ -1148,6 +1150,17 @@ class Spectrum:
         wavenumber = self.wavenumber
         data_array = set_conventions(
             self.variance_density * wavenumber**2, "slope_spectrum", overwrite=True
+        )
+        data_array = data_array.assign_coords({NAME_K: wavenumber})
+        return data_array
+
+    @property
+    def directional_slope_spectrum(self) -> DataArray:
+        wavenumber = self.wavenumber
+        data_array = set_conventions(
+            self.directional_variance_density * wavenumber**2,
+            "directional_slope_spectrum",
+            overwrite=True,
         )
         data_array = data_array.assign_coords({NAME_K: wavenumber})
         return data_array
