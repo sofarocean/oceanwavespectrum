@@ -42,38 +42,38 @@ cf_conventions = {
         "standard_name": "sea_surface_wave_directional_variance_spectral_density",
         "long_name": "Spectral density",
         "valid_min": 0,
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
     },
     NAME_e: {
         "units": "m^2/Hz",
         "standard_name": "sea_surface_wave_variance_spectral_density",
         "long_name": "Spectral density",
         "valid_min": 0,
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
     },
     NAME_a1: {
         "long_name": "First order cosine coefficient",
         "valid_min": -1,
         "valid_max": 1,
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
     },
     NAME_b1: {
         "long_name": "First order sine coefficient",
         "valid_min": -1,
         "valid_max": 1,
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
     },
     NAME_a2: {
         "long_name": "Second order cosine coefficient",
         "valid_min": -1,
         "valid_max": 1,
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
     },
     NAME_b2: {
         "long_name": "Second order sine coefficient",
         "valid_min": -1,
         "valid_max": 1,
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
     },
     NAME_LAT: {
         "units": "degree_north",
@@ -93,21 +93,21 @@ cf_conventions = {
         "units": "Hz",
         "standard_name": "sea_surface_wave_frequency",
         "long_name": "Frequency",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     NAME_W: {
         "units": "rad/s",
         "standard_name": "sea_surface_wave_frequency",
         "long_name": "Frequency",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     NAME_DEPTH: {
         "units": "m",
         "standard_name": "sea_floor_depth_below_geoid",
         "long_name": "Depth",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
     },
     NAME_T: {
         # To note- xarray automatically encodes this information when writing to netcdf. Otherwise, datetime64 encodes
@@ -119,83 +119,83 @@ cf_conventions = {
         "units": "m",
         "standard_name": "sea_surface_wave_significant_height",
         "long_name": "Significant wave height",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "Hrms": {
         "units": "m",
         "long_name": "Root mean square waveheight",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "Tp": {
         "units": "s",
         "standard_name": "sea_surface_wave_period_at_variance_spectral_density_maximum",
         "long_name": "Peak period",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "mean_period": {
         "units": "s",
         "standard_name": "sea_surface_wave_mean_period_from_variance_spectral_density_first_frequency_moment",
         "long_name": "Mean wave period",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "zero_crossing_period": {
         "units": "s",
         "standard_name": "sea_surface_wave_mean_period_from_variance_spectral_density_second_frequency_moment",
         "long_name": "Mean wave period",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "energy_period": {
         "units": "s",
         "standard_name": "sea_surface_wave_mean_period_from_variance_spectral_density_inverse_frequency_moment",
         "long_name": "Mean wave period",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "M2": {
         # Not an official cf-standard name
         "units": "m^2 Hz^2",
         "long_name": "Second frequency moment",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "M1": {
         # Not an official cf-standard name
         "units": "m^2 Hz",
         "long_name": "First frequency moment",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "M0": {
         # Not an official cf-standard name
         "units": "m^2",
         "long_name": "Variance",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "MN": {
         # Not an official cf-standard name
         "units": "m^2 Hz^N",
         "long_name": "M frequency moment",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "frequency_bins": {
         # Not an official cf-standard name
         "units": "Hz",
         "long_name": "frequency interval",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "direction_bins": {
         # Not an official cf-standard name
         "units": "degree",
         "long_name": "direction interval",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
         "valid_max": 360,
     },
@@ -223,88 +223,88 @@ cf_conventions = {
         # Not an official cf-standard name
         "units": "m/s",
         "long_name": "Wave phase speed",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "Cp": {
         # Not an official cf-standard name
         "units": "m/s",
         "long_name": "Peak wave phase speed",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "group_speed": {
         # Not an official cf-standard name
         "units": "m/s",
         "long_name": "Group speed",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "wave_age": {
         # Not an official cf-standard name
         "long_name": "Wave age",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "wavelength": {
         # Not an official cf-standard name
         "units": "m",
         "long_name": "Wavelength",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     NAME_K: {
         "units": "rad/m",
         "long_name": "Wavenumber",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "wavenumber_directional_variance_density": {
         "units": "m^3/rad/degree",
         "long_name": "Wavenuber spectral density",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "wavenumber_variance_density": {
         "units": "m^3/rad",
         "long_name": "Wavenumber spectral density",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "saturation_spectrum": {
         "units": "1/Hz/m",
         "long_name": "Saturation spectrum",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "slope_spectrum": {
         "units": "1/Hz",
         "long_name": "Slope spectrum",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "directional_slope_spectrum": {
         "units": "1/Hz/rad",
         "long_name": "Directional slope spectrum",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "mean_squared_slope": {
         "long_name": "Mean squared slope",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "peak_frequency": {
         "units": "Hz",
         "long_name": "Peak wave frequency",
         "standard_name": "sea_surface_wave_frequency_at_variance_spectral_density_maximum",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "peak_angular_frequency": {
         "units": "rad/s",
         "long_name": "Peak wave angular frequency",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "mean_direction": {
@@ -312,7 +312,7 @@ cf_conventions = {
         "meteorological": {
             "units": "degree",
             "long_name": "Wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "standard_name": "sea_surface_wave_from_direction",
@@ -321,7 +321,7 @@ cf_conventions = {
         "oceanographical": {
             "units": "degree",
             "long_name": "Wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "standard_name": "sea_surface_wave_to_direction",
@@ -330,7 +330,7 @@ cf_conventions = {
         "mathematical": {
             "units": "degree",
             "long_name": "Wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "comment": "Direction the waves are going to, measured anti-clockwise from East",
@@ -341,7 +341,7 @@ cf_conventions = {
         "meteorological": {
             "units": "degree",
             "long_name": "Wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "standard_name": "sea_surface_wave_from_direction",
@@ -350,7 +350,7 @@ cf_conventions = {
         "oceanographical": {
             "units": "degree",
             "long_name": "Wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "standard_name": "sea_surface_wave_to_direction",
@@ -359,7 +359,7 @@ cf_conventions = {
         "mathematical": {
             "units": "degree",
             "long_name": "Wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "comment": "Direction the waves are going to, measured anti-clockwise from East",
@@ -370,7 +370,7 @@ cf_conventions = {
         "meteorological": {
             "units": "degree",
             "long_name": "Peak wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "standard_name": "sea_surface_wave_from_direction_at_variance_spectral_density_maximum",
@@ -379,7 +379,7 @@ cf_conventions = {
         "oceanographical": {
             "units": "degree",
             "long_name": "Peak wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "standard_name": "sea_surface_wave_to_direction_at_variance_spectral_density_maximum",
@@ -388,7 +388,7 @@ cf_conventions = {
         "mathematical": {
             "units": "degree",
             "long_name": "Peak wave direction",
-            "missing_value": np.NAN,
+            "missing_value": np.nan,
             "valid_min": 0,
             "valid_max": 360,
             "comment": "Direction the waves are going to, measured anti-clockwise from East",
@@ -397,7 +397,7 @@ cf_conventions = {
     "mean_directional_spread": {
         "units": "degree",
         "long_name": "Wave directional spread",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
         "valid_max": 360,
         "standard_name": "sea_surface_wave_directional_spread",
@@ -405,7 +405,7 @@ cf_conventions = {
     "directional_spread": {
         "units": "degree",
         "long_name": "Wave directional spread",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
         "valid_max": 360,
         "standard_name": "sea_surface_wave_directional_spread",
@@ -413,7 +413,7 @@ cf_conventions = {
     "peak_directional_spread": {
         "units": "degree",
         "long_name": "Wave directional spread",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
         "valid_max": 360,
         "standard_name": "sea_surface_wave_directional_spread",
@@ -421,20 +421,20 @@ cf_conventions = {
     "cdf": {
         "units": "m^2",
         "long_name": "Cumulative distribution function",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "peak_wavenumber": {
         "units": "rad/m",
         "long_name": "Peak wave wavenumber",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
     },
     "third_order_moment_surface_elevation": {
         # Not an official cf-standard name
         "units": "m^3",
         "long_name": "sea_surface_third_order_moment",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": -100,
         "valid_max": 100,
         "comment": "Moment estimated based on second-order perturbation theory",
@@ -442,7 +442,7 @@ cf_conventions = {
     "wave_skewness": {
         # Not an official cf-standard name
         "long_name": "sea_surface_wave_skewness",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": -5,
         "valid_max": 5,
         "comment": "Skewness estimated based on second-order perturbation theory",
@@ -450,7 +450,7 @@ cf_conventions = {
     "ursell_number": {
         # Not an official cf-standard name
         "long_name": "ursell_number",
-        "missing_value": np.NAN,
+        "missing_value": np.nan,
         "valid_min": 0,
         "comment": "Ursell number",
     },
