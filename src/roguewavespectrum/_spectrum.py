@@ -7,6 +7,7 @@ from linearwavetheory import (
     intrinsic_group_speed,
     intrinsic_phase_speed,
 )
+from linearwavetheory.stokes_theory._higher_order_spectra import bound_wave_spectra_1d
 from linearwavetheory.stokes_theory import surface_elevation_skewness
 from roguewavespectrum._geospatial import contains
 from roguewavespectrum._time import to_datetime64
@@ -75,35 +76,36 @@ class Spectrum:
         self, dataset: Dataset, physics_options: PhysicsOptions = None, **kwargs
     ):
         """
-        Initialize a spectrum object from a xarray dataset. The contents on the dataset determines if the spectrum is
-        a 1D or 2D spectrum.
+            Initialize a spectrum object from a xarray dataset. The contents on the dataset determines if the spectrum
+            is a 1D or 2D spectrum.
 
-        1D spectrum required variables:
-        - variance_density[...,frequency]: variance density spectrum
-        - a1[...,frequency]: Fourier moment a1
-        - b1[...,frequency]: Fourier moment b1
-        - a2[...,frequency]: Fourier moment a2
-        - b2[...,frequency]: Fourier moment b2
-        - frequency[frequency]: frequency coordinates
+            1D spectrum required variables:
+            - variance_density[...,frequency]: variance density spectrum
+            - a1[...,frequency]: Fourier moment a1
+            - b1[...,frequency]: Fourier moment b1
+            - a2[...,frequency]: Fourier moment a2
+            - b2[...,frequency]: Fourier moment b2
+            - frequency[frequency]: frequency coordinates
 
-        2D spectrum required variables:
-        - directional_variance_density[...,frequency,direction]: variance density spectrum
-        - frequency[frequency]: frequency coordinates
-        - direction[direction]: direction coordinates. Direction must be in degrees, and span [0,360) degrees.
+            2D spectrum required variables:
+            - directional_variance_density[...,frequency,direction]: variance density spectrum
+            - frequency[frequency]: frequency coordinates
+            - direction[direction]: direction coordinates. Direction must be in degrees, and span [0,360) degrees.
 
-        The presence of either a `directional_variance_density` or `variance_density` variable determines if the
-        spectrum is a 1D or 2D spectrum. If both are present, an error is raised as the spectrum is ambiguous (i.e.
-        variance_density may or may not represent a directionally integrated version of directional_variance_density).
+            The presence of either a `directional_variance_density` or `variance_density` variable determines if the
+            spectrum is a 1D or 2D spectrum. If both are present, an error is raised as the spectrum is ambiguous (i.e.
+            variance_density may or may not represent a directionally integrated version of directional_variance_density
+            ).
 
-        Leading dimensions are optional, preserved in calculations and output, may be named or anonymous, and may be
-        associated with coordinates. For example, if `variance_density` has dimensions `time` and `frequency`,
-        then calculating significant waveheight will return waveheigth with dimensions `time`.
+            Leading dimensions are optional, preserved in calculations and output, may be named or anonymous, and may be
+            associated with coordinates. For example, if `variance_density` has dimensions `time` and `frequency`,
+            then calculating significant waveheight will return waveheigth with dimensions `time`.
 
-        We may optionally add, `time`, `latitude` or `longitude` as variables or as coordinates.
+            We may optionally add, `time`, `latitude` or `longitude` as variables or as coordinates.
 
-        Example 1D dataset specification where we have spectra as function of frequency and time, and we have latitude,
-        longitude locations:
-        ```python
+            Example 1D dataset specification where we have spectra as function of frequency and time, and we have
+            latitude, longitude locations:
+            ```python
         dataset = Dataset(
             data_vars={
                 "variance_density": (["time","frequency"], variance_density),})
@@ -115,33 +117,33 @@ class Spectrum:
                 "longitude": (["time"], longitude),
             },
             coords={"frequency": frequency,"time": time},
-        ```
+            ```
 
-        Example 2D dataset specification where we have spectra as function of frequency:
-        ```python
-        dataset = Dataset(
-            data_vars={
-                "directional_variance_density": (["frequency","direction"], directional_variance_density),})
-            },
-            coords={"frequency": frequency,"direction": direction},
-        ```
+            Example 2D dataset specification where we have spectra as function of frequency:
+            ```python
+            dataset = Dataset(
+                data_vars={
+                    "directional_variance_density": (["frequency","direction"], directional_variance_density),})
+                },
+                coords={"frequency": frequency,"direction": direction},
+            ```
 
-        Example 2D dataset specification where we have spectra as function of frequency, time, latitude and longitude (
-        e.g. as from a model):
-        ```python
-        dataset = Dataset(
-            data_vars={
-                "directional_variance_density": (["time,latitude,longitude,frequency","direction"],
-                    directional_variance_density),})
-            },
-            coords={"frequency": frequency,"direction": direction,"time": time, "latitude": latitude,
-                "longitude": longitude},
-        ```
-        Note that in this case "latitude and longitude" are coordinates on the object (as opposed to variables in
-        the 1D example above).
+            Example 2D dataset specification where we have spectra as function of frequency, time, latitude and
+            longitude (e.g. as from a model):
+            ```python
+            dataset = Dataset(
+                data_vars={
+                    "directional_variance_density": (["time,latitude,longitude,frequency","direction"],
+                        directional_variance_density),})
+                },
+                coords={"frequency": frequency,"direction": direction,"time": time, "latitude": latitude,
+                    "longitude": longitude},
+            ```
+            Note that in this case "latitude and longitude" are coordinates on the object (as opposed to variables in
+            the 1D example above).
 
-        :param dataset: Dataset containing the spectral data.
-        :param physics_options: Options for calculating derived variables from linear wave theory.
+            :param dataset: Dataset containing the spectral data.
+            :param physics_options: Options for calculating derived variables from linear wave theory.
 
         """
 
@@ -354,6 +356,34 @@ class Spectrum:
                 dataset = dataset.assign({name: self.dataset[name]})
         cls = type(self)
         return cls(dataset)
+
+    def bound_spectrum_1d(self: "Spectrum", kind="eulerian", **kwargs) -> "Spectrum":
+        if self.is_2d:
+            spec2d = self
+        else:
+            spec2d = self.as_frequency_direction_spectrum(36)
+
+        data = bound_wave_spectra_1d(
+            spec2d.frequency.values,
+            spec2d.direction().values,
+            spec2d.directional_variance_density.values,
+            spec2d.depth.values,
+            kind=kind,
+            **kwargs,
+        )
+        a1 = np.full_like(data, np.nan)
+        b1 = np.full_like(data, np.nan)
+        a2 = np.full_like(data, np.nan)
+        b2 = np.full_like(data, np.nan)
+
+        output = self.as_frequency_spectrum()
+
+        output.dataset[NAME_e].values = data
+        output.dataset[NAME_a1].values = a1
+        output.dataset[NAME_b1].values = b1
+        output.dataset[NAME_a2].values = a2
+        output.dataset[NAME_b2].values = b2
+        return output
 
     def copy(self: "Spectrum", deep=True) -> "Spectrum":
         """
