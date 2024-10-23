@@ -31,7 +31,8 @@ def _read_spotter_spectral_file(file):
             )
         )
 
-    return {"time": np.array(time), "frequencies": frequencies, "values": values}
+    time, unique = np.unique(np.array(time), return_index=True)
+    return {"time": time, "frequencies": frequencies, "values": values[unique, ...]}
 
 
 def read_spectral_csv(path: str, depth=np.inf, **kwargs) -> Spectrum:

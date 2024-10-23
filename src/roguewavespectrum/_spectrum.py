@@ -1769,13 +1769,17 @@ class Spectrum:
         for dim in self.dims_space_time:
             coords[dim] = self.dataset[dim].values
 
+        _data = inverse_intrinsic_dispersion_relation(
+            2 * np.pi * peak_frequency.values,
+            self.depth.values,
+            physics_options=_as_physicsoptions_lwt(self._physics_options),
+        )
+        if len(self.dims_space_time) == 0:
+            _data = _data[0]
+
         return set_conventions(
             DataArray(
-                data=inverse_intrinsic_dispersion_relation(
-                    2 * np.pi * peak_frequency.values,
-                    self.depth.values,
-                    physics_options=_as_physicsoptions_lwt(self._physics_options),
-                ),
+                data=_data,
                 dims=self.dims_space_time,
                 coords=coords,
             ),
@@ -2075,6 +2079,7 @@ def _bandpass(
     # 3) interpolate the spectrum to the new frequency array, if either fmin or fmax was added.
     # 4) calculate the integral.
     #
+    coords = DataArray(coords[dim], dims=dim, coords={dim: coords})
     if np.isfinite(_max):
         # If fmax is finite we may need to add it:
         coords = concat(
