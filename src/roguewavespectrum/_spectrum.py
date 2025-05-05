@@ -1860,11 +1860,12 @@ class Spectrum:
         for dim in self.dims_space_time:
             coords[dim] = self.dataset[dim].values
 
+        jacobian = 2 * np.pi
         # Note, we have to make the array contiguous as Numba otherwise may fail on the calculation.
         skewness = surface_elevation_skewness(
-            self.frequency.values,
+            self.frequency.values * jacobian,
             self.direction().values,
-            np.ascontiguousarray(self.directional_variance_density.values),
+            np.ascontiguousarray(self.directional_variance_density.values) / jacobian,
             self.depth.values,
             _as_physicsoptions_lwt(self._physics_options),
         )

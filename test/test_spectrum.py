@@ -9,7 +9,7 @@ from roguewavespectrum.parametric import (
     DirCosineN,
     FreqPiersonMoskowitz,
 )
-from linearwavetheory._constants import GRAV
+from linearwavetheory.settings import _GRAV as GRAV
 from roguewavespectrum._time import to_datetime64
 from numpy import linspace, inf, ndarray, pi, array, ones, nan, sqrt
 from numpy.testing import assert_allclose
@@ -681,7 +681,7 @@ def test_wavenumber_directional_spectral_density():
 
 def test_third_order_moment_surface_elevation():
     specs = helper_create_spectra(4)
-    _canary_values = [0.00436271, 0.01378833, 0.03366291, 0.06980341]
+    _canary_values = np.array([0.008712, 0.027534, 0.067222, 0.139391])
     for spec in specs:
         if spec.is_1d:
             try:
@@ -696,7 +696,7 @@ def test_third_order_moment_surface_elevation():
 
 def test_skewness():
     specs = helper_create_spectra(4)
-    _canary_values = [0.03490171, 0.04653561, 0.05816951, 0.06980341]
+    _canary_values = [0.069695, 0.092927, 0.116159, 0.139391]
     for spec in specs:
         if spec.is_1d:
             try:
