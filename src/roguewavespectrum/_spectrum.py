@@ -7,7 +7,10 @@ from linearwavetheory import (
     intrinsic_group_speed,
     intrinsic_phase_speed,
 )
-from linearwavetheory.stokes_theory._higher_order_spectra import bound_wave_spectra_1d
+from linearwavetheory.stokes_theory._higher_order_spectra import (
+    nonlinear_wave_spectra_1d,
+)
+from linearwavetheory.settings import stokes_theory_options
 from linearwavetheory.stokes_theory import surface_elevation_skewness
 from roguewavespectrum._geospatial import contains
 from roguewavespectrum._time import to_datetime64
@@ -357,19 +360,25 @@ class Spectrum:
         cls = type(self)
         return cls(dataset)
 
-    def bound_spectrum_1d(self: "Spectrum", kind="eulerian", **kwargs) -> "Spectrum":
+    def bound_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
+
+        options = stokes_theory_options(**kwargs)
+
         if self.is_2d:
             spec2d = self
         else:
             spec2d = self.as_frequency_direction_spectrum(36)
 
-        data = bound_wave_spectra_1d(
-            spec2d.frequency.values,
-            spec2d.direction().values,
-            spec2d.directional_variance_density.values,
-            spec2d.depth.values,
-            kind=kind,
-            **kwargs,
+        jacobian_freq_to_angfreq = 2 * np.pi
+        data = (
+            nonlinear_wave_spectra_1d(
+                spec2d.angular_frequency.values,
+                spec2d.direction().values,
+                spec2d.directional_variance_density.values / jacobian_freq_to_angfreq,
+                spec2d.depth.values,
+                nonlinear_options=options,
+            )
+            * jacobian_freq_to_angfreq
         )
         a1 = np.full_like(data, np.nan)
         b1 = np.full_like(data, np.nan)
@@ -383,6 +392,31 @@ class Spectrum:
         output.dataset[NAME_b1].values = b1
         output.dataset[NAME_a2].values = a2
         output.dataset[NAME_b2].values = b2
+        return output
+
+    def nonlinear_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
+        bound = self.bound_spectrum_1d(**kwargs)
+        data = bound.dataset[NAME_e].values
+        a1 = np.full_like(data, np.nan)
+        b1 = np.full_like(data, np.nan)
+        a2 = np.full_like(data, np.nan)
+        b2 = np.full_like(data, np.nan)
+
+        output = self.as_frequency_spectrum()
+
+        output.dataset[NAME_e].values += bound.dataset[NAME_e].values
+        output.dataset[NAME_a1].values = a1
+        output.dataset[NAME_b1].values = b1
+        output.dataset[NAME_a2].values = a2
+        output.dataset[NAME_b2].values = b2
+        return output
+
+    def primary_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
+        bound = self.bound_spectrum_1d(**kwargs)
+
+        output = self.as_frequency_spectrum()
+
+        output.dataset[NAME_e].values -= bound.dataset[NAME_e].values
         return output
 
     def copy(self: "Spectrum", deep=True) -> "Spectrum":
@@ -1826,11 +1860,12 @@ class Spectrum:
         for dim in self.dims_space_time:
             coords[dim] = self.dataset[dim].values
 
+        jacobian = 2 * np.pi
         # Note, we have to make the array contiguous as Numba otherwise may fail on the calculation.
         skewness = surface_elevation_skewness(
-            self.frequency.values,
+            self.frequency.values * jacobian,
             self.direction().values,
-            np.ascontiguousarray(self.directional_variance_density.values),
+            np.ascontiguousarray(self.directional_variance_density.values) / jacobian,
             self.depth.values,
             _as_physicsoptions_lwt(self._physics_options),
         )

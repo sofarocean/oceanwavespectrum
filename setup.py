@@ -6,12 +6,12 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewavespectrum",
-    version="0.2.15",
+    version="0.2.17",
     license="Apache 2 License",
     install_requires=[
         "numpy",
         "numba",
-        "linearwavetheory",
+        "linearwavetheory>=0.0.21",
         "xarray",
         "scipy",
         "numba-progress",
