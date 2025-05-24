@@ -454,6 +454,20 @@ cf_conventions = {
         "valid_min": 0,
         "comment": "Ursell number",
     },
+    "generalized_ursell_number": {
+        # Not an official cf-standard name
+        "long_name": "generalized_ursell_number",
+        "missing_value": np.nan,
+        "valid_min": 0,
+        "comment": "Generalized Ursell number",
+    },
+    "relative_depth": {
+        # Not an official cf-standard name
+        "long_name": "relative_depth",
+        "missing_value": np.nan,
+        "valid_min": 0,
+        "comment": "Relative Depth",
+    },
 }
 
 

@@ -282,6 +282,12 @@ scipy solver to solve the nonlinear set of equations in MeM2. The number of dire
 
 For further details see the documentation of the `roguewavespectrum.Spectrum.as_frequency_direction_spectrum` method.
 
+... estimate a 2D Bound wave spectrum
+-----------------------------------------
+For this we use the `roguewavespectrum.Spectrum.bound_spectrum_2d' method. This method uses second-order theory to
+estimate the bound wave spectrum from a primary wave spectrum. Similar functionality exists to estimate the complete
+nonlinear spectrum or the primary wave spectrum from a nonlinear spectrum.
+
 ... calculate a 1D spectrum from a 2D spectrum
 -----------------------------------------
 For this we use the `roguewavespectrum.Spectrum.as_frequency_spectrum` method. This will return a 1D spectrum,

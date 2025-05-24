@@ -7,8 +7,9 @@ from linearwavetheory import (
     intrinsic_group_speed,
     intrinsic_phase_speed,
 )
-from linearwavetheory.stokes_theory._higher_order_spectra import (
-    nonlinear_wave_spectra_1d,
+from linearwavetheory import (
+    nonlinear_wave_spectra_2d,
+    estimate_primary_spectrum_from_nonlinear_spectra,
 )
 from linearwavetheory.settings import stokes_theory_options
 from linearwavetheory.stokes_theory import surface_elevation_skewness
@@ -360,18 +361,73 @@ class Spectrum:
         cls = type(self)
         return cls(dataset)
 
-    def bound_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
+    def bound_spectrum_2d(self: "Spectrum", **kwargs) -> "Spectrum":
+        """
+        Estimate the bound wave spectrum assuming the spectral object represents the primary waves in an Eulerian frame
+        of reference.
 
+        :return: The 2D Bound Wave spectrum
+        """
         options = stokes_theory_options(**kwargs)
 
-        if self.is_2d:
-            spec2d = self
-        else:
+        if self.is_1d:
             spec2d = self.as_frequency_direction_spectrum(36)
+        else:
+            spec2d = self
 
         jacobian_freq_to_angfreq = 2 * np.pi
         data = (
-            nonlinear_wave_spectra_1d(
+            nonlinear_wave_spectra_2d(
+                spec2d.angular_frequency.values,
+                spec2d.direction().values,
+                spec2d.directional_variance_density.values / jacobian_freq_to_angfreq,
+                spec2d.depth.values,
+                nonlinear_options=options,
+            )
+            * 2
+            * np.pi
+        )
+
+        output = spec2d.copy(deep=True)
+        output.dataset[NAME_E].values = data
+        return output
+
+    def bound_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
+        """
+        Estimate the 1D bound wave spectrum assuming the spectral object represents the primary waves in an Eulerian
+        frame of reference.
+
+        :return: The 1D Bound Wave spectrum
+        """
+        return self.bound_spectrum_2d(**kwargs).as_frequency_spectrum()
+
+    def nonlinear_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
+        """
+        Estimate the nonlinear spectrum assuming the spectral object represents the primary waves in an Eulerian frame
+        of reference.
+
+        :return: The 1D Spectrum, including bound contributions
+        """
+        return self.nonlinear_spectrum_2d(**kwargs).as_frequency_spectrum()
+
+    def primary_spectrum_2d(self: "Spectrum", **kwargs) -> "Spectrum":
+        """
+        WARNING: This feature is experimental - and may converge poorly at high frequencies. (May 23, 2025)
+
+        Estimate the primary wave spectrum assuming the spectral object represents the nonlinear waves in an Eulerian
+        frame of reference.
+
+        :return: The 2D Free Wave Spectrum
+        """
+        options = stokes_theory_options(**kwargs)
+        if self.is_1d:
+            spec2d = self.as_frequency_direction_spectrum(36)
+        else:
+            spec2d = self
+
+        jacobian_freq_to_angfreq = 2 * np.pi
+        data = (
+            estimate_primary_spectrum_from_nonlinear_spectra(
                 spec2d.angular_frequency.values,
                 spec2d.direction().values,
                 spec2d.directional_variance_density.values / jacobian_freq_to_angfreq,
@@ -380,44 +436,38 @@ class Spectrum:
             )
             * jacobian_freq_to_angfreq
         )
-        a1 = np.full_like(data, np.nan)
-        b1 = np.full_like(data, np.nan)
-        a2 = np.full_like(data, np.nan)
-        b2 = np.full_like(data, np.nan)
 
-        output = self.as_frequency_spectrum()
-
-        output.dataset[NAME_e].values = data
-        output.dataset[NAME_a1].values = a1
-        output.dataset[NAME_b1].values = b1
-        output.dataset[NAME_a2].values = a2
-        output.dataset[NAME_b2].values = b2
+        output = spec2d.copy(deep=True)
+        output.dataset[NAME_E].values = data
         return output
 
-    def nonlinear_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
-        bound = self.bound_spectrum_1d(**kwargs)
-        data = bound.dataset[NAME_e].values
-        a1 = np.full_like(data, np.nan)
-        b1 = np.full_like(data, np.nan)
-        a2 = np.full_like(data, np.nan)
-        b2 = np.full_like(data, np.nan)
+    def nonlinear_spectrum_2d(self: "Spectrum", **kwargs) -> "Spectrum":
+        """
+        Estimate the nonlinear spectrum assuming the spectral object represents the primary waves in an Eulerian frame
+        of reference.
 
-        output = self.as_frequency_spectrum()
+        :return: The 2D Spectrum, including bound contributions
+        """
+        if self.is_1d:
+            spec2d = self.as_frequency_direction_spectrum(36)
+        else:
+            spec2d = self
 
-        output.dataset[NAME_e].values += bound.dataset[NAME_e].values
-        output.dataset[NAME_a1].values = a1
-        output.dataset[NAME_b1].values = b1
-        output.dataset[NAME_a2].values = a2
-        output.dataset[NAME_b2].values = b2
+        bound = spec2d.bound_spectrum_2d(**kwargs)
+        output = spec2d.copy(deep=True)
+        output.dataset[NAME_E].values += bound.dataset[NAME_E].values
         return output
 
     def primary_spectrum_1d(self: "Spectrum", **kwargs) -> "Spectrum":
-        bound = self.bound_spectrum_1d(**kwargs)
+        """
+        WARNING: This feature is experimental - and may converge poorly at high frequencies. (May 23, 2025)
 
-        output = self.as_frequency_spectrum()
+        Estimate the primary wave spectrum assuming the spectral object represents the nonlinear waves in an Eulerian
+        frame of reference.
 
-        output.dataset[NAME_e].values -= bound.dataset[NAME_e].values
-        return output
+        :return: The 1D Free Wave Spectrum
+        """
+        return self.primary_spectrum_2d(**kwargs).as_frequency_spectrum()
 
     def copy(self: "Spectrum", deep=True) -> "Spectrum":
         """
@@ -1917,6 +1967,55 @@ class Spectrum:
         """
         return set_conventions(
             self.m1(fmin, fmax) / self.m0(fmin, fmax), "energy_period", overwrite=True
+        )
+
+    def generalized_ursell_number(
+        self, fmin: float = 0.0, fmax: float = np.inf
+    ) -> DataArray:
+        """
+        Generalized Ursell number of the wave spectrum. This is a measure of the shallow water-nonlinearity of the wave
+        field which we define here as
+
+        $$Ur = \\frac{\\epsilon}{\\mU^3}$$
+
+        where $\\epsilon$ is the steepness and $\\mu=tanh(kd)$ is the relative depth. Here we estimate
+        epsilon from the spectrum as
+
+        $$\\epsilon = \\frac{k_peak H_{rms}}{2}$$
+
+        where $H_{rms}$ is the root-mean-square wave-height, and $k_peak$ the peak wavenumber. Furthermore, the relative
+        depth is defined as
+
+        $$\\mu = d k_{p}$$
+
+        with $d$ is the water depth.
+
+        :param fmin: minimum frequency, inclusive
+        :param fmax: maximum frequency, inclusive
+        :return: Ursell number
+        """
+        steepness = np.sqrt(self.mean_squared_slope())
+
+        mean_wavenumber = _integrate(
+            self.wavenumber * self.variance_density, NAME_F, fmin, fmax
+        ) / self.m0(fmin, fmax)
+        relative_depth = np.tanh(self.depth * mean_wavenumber)
+        print("r", relative_depth)
+        return set_conventions(
+            steepness / relative_depth**3,
+            "generalized_ursell_number",
+            overwrite=True,
+        )
+
+    def relative_depth(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
+        mean_wavenumber = _integrate(
+            self.wavenumber * self.variance_density, NAME_F, fmin, fmax
+        ) / self.m0(fmin, fmax)
+        relative_depth = np.tanh(self.depth * mean_wavenumber)
+        return set_conventions(
+            relative_depth,
+            "relative_depth",
+            overwrite=True,
         )
 
     def ursell_number(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
