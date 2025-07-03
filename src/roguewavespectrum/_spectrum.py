@@ -510,7 +510,10 @@ class Spectrum:
             length = 1
             shape = (1,)
         else:
-            length = np.product(shape)
+            try:
+                length = np.product(shape)
+            except AttributeError:
+                length = np.prod(shape)
 
         # Calculate the flattened shape
         new_shape = (length,)
