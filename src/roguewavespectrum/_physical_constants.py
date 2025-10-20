@@ -12,6 +12,7 @@ KINEMATIC_VISCOSITY_WATER = 1.19e-6
 VONKARMAN_CONSTANT = 0.4
 DYNAMIC_SURFACE_TENSION_WATER = 0.073
 PHILLIPS_CONSTANT = 0.0081
+CHARNOCK_CONSTANT = 0.012
 
 
 class PhysicsOptions:
@@ -40,6 +41,7 @@ class PhysicsOptions:
         gravity: float = GRAVITATIONAL_ACCELERATION,
         wave_type: str = "gravity",
         wave_regime: str = "intermediate",
+        charnock_constant: float = CHARNOCK_CONSTANT,
     ):
         """
         :param density: Density of the fluid. Default is 1024 kg/m^3
@@ -59,6 +61,7 @@ class PhysicsOptions:
         self.gravity = gravity
         self.wave_type = wave_type
         self.wave_regime = wave_regime
+        self.charnock_constant = charnock_constant
 
     @property
     def kinematic_surface_tension(self):
@@ -78,6 +81,7 @@ PHYSICSOPTIONS = PhysicsOptions(
     gravity=GRAVITATIONAL_ACCELERATION,
     wave_type="gravity",
     wave_regime="intermediate",
+    charnock_constant=CHARNOCK_CONSTANT,
 )
 
 
