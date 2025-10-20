@@ -30,6 +30,11 @@ from ._directions import (
     get_angle_convention_and_unit,
 )
 
+from ._physics import (
+    estimate_wind_speed_from_wave_spectrum,
+    estimate_wind_direction_from_wave_spectrum,
+)
+
 from roguewavespectrum._estimators.estimate import (
     estimate_directional_spectrum_from_moments,
     Estimators,
@@ -2077,6 +2082,124 @@ class Spectrum:
         return set_conventions(
             self.peak_wavespeed() / windspeed, "wave_age", overwrite=True
         )
+
+    def estimate_wind_speed_at_10_meter(self, **kwargs) -> DataArray:
+        """
+        Estimate the wind speed at 10 meter height from the wave spectrum using the method by Shimura et al. (2022)
+        as calibrated by Dorsay et al. (2023) for Spotter wave buoys. The method uses the high-frequency tail of the
+        wave spectrum to estimate the wind speed and assumes fully developed steady sea conditions. Nearby landmasses
+        might influence the accuracy of the estimate. It is reliably for wind speeds between approximately 5 m/s and 20
+        m/s. Outside this range caution is advised.
+
+        Shimura, T., Mori, N., Baba, Y., & Miyashita, T. (2022). Ocean surface wind estimation from waves based on small
+        GPS buoy observations in a bay and the open ocean. Journal of Geophysical Research: Oceans,
+        127(9), e2022JC018786.
+
+        Dorsay, C., Egan, G., Houghton, I., Hegermiller, C., & Smit, P. B. (2023). Proxy observations of surface wind
+        from a globally distributed network of wave buoys. Journal of Atmospheric and Oceanic Technology,
+        40(12), 1591-1603.
+
+        :param kwargs:
+        :return: Estimated wind speed at 10 meter height (m/s)
+        """
+
+        # these are the defaults used for spotter buoys
+        maximum_tail_frequency = kwargs.get("maximum_tail_frequency", 0.5)
+        height_meter = kwargs.get("height_meter", 10.0)
+        power = kwargs.get("power", 4)
+        directional_spreading_constant = kwargs.get(
+            "directional_spreading_constant", 2.5
+        )
+        phillips_constant_beta = kwargs.get("phillips_constant_beta", 0.0133)
+        physics_options = kwargs.get("physics_options", None)
+
+        if physics_options is None:
+            # NOTE: Using default physics options with charnock constant overridden
+            physics_options = PhysicsOptions(
+                density=PHYSICSOPTIONS.density,
+                temperature_degrees=PHYSICSOPTIONS.temperature,
+                dynamic_viscosity=PHYSICSOPTIONS.dynamic_viscosity,
+                vonkarman_constant=PHYSICSOPTIONS.vonkarman_constant,
+                dynamic_surface_tension=PHYSICSOPTIONS.surface_tension,
+                gravity=PHYSICSOPTIONS.gravity,
+                wave_type=PHYSICSOPTIONS.wave_type,
+                wave_regime=PHYSICSOPTIONS.wave_regime,
+                charnock_constant=0.02,
+            )
+
+        spec1d = self.as_frequency_spectrum()
+        spec1d = spec1d.bandpass(fmax=maximum_tail_frequency + 1e-6)
+
+        wind_speed = estimate_wind_speed_from_wave_spectrum(
+            spec1d.frequency,
+            spec1d.variance_density,
+            spec1d.a1,
+            spec1d.b1,
+            height_meter,
+            power=power,
+            directional_spreading_constant=directional_spreading_constant,
+            phillips_constant_beta=phillips_constant_beta,
+            physics_options=physics_options,
+        )
+        wind_speed = wind_speed.drop_vars(names=NAME_F, errors="ignore")
+        wind_speed = set_conventions(wind_speed, "wind_direction", overwrite=True)
+        return wind_speed
+
+    def estimate_wind_direction(
+        self,
+        directional_unit: DirectionalUnit = "degree",
+        directional_convention: DirectionalConvention = "mathematical",
+        **kwargs,
+    ) -> DataArray:
+        """
+        Estimate the wind direction from the wave spectrum using the method by Shimura et al. (2022)
+        as calibrated by Dorsay et al. (2023) for Spotter wave buoys. The method uses the high-frequency tail of the
+        wave spectrum to estimate the wind speed and assumes fully developed steady sea conditions. Nearby landmasses
+        might influence the accuracy of the estimate. It is reliably for wind speeds between approximately 5 m/s and 20
+        m/s. Outside this range caution is advised.
+
+        Shimura, T., Mori, N., Baba, Y., & Miyashita, T. (2022). Ocean surface wind estimation from waves based on small
+        GPS buoy observations in a bay and the open ocean. Journal of Geophysical Research: Oceans,
+        127(9), e2022JC018786.
+
+        Dorsay, C., Egan, G., Houghton, I., Hegermiller, C., & Smit, P. B. (2023). Proxy observations of surface wind
+        from a globally distributed network of wave buoys. Journal of Atmospheric and Oceanic Technology,
+        40(12), 1591-1603.
+
+        :param directional_unit: units of the output angle, one of 'degree' or 'radians'
+        :param directional_convention: convention of the output angle, one of 'mathematical' or 'oceanographical' or
+               'meteorological' where:
+            - 'mathematical': 0 degrees is East, angles increase anticlockwise, direction is the direction the wind
+                points to.
+            - 'oceanographical': 0 degrees is North, angles increase clockwise, direction is the direction the wind
+               points to.
+            - 'meteorological': 0 degrees is North, angles increase clockwise, direction is the direction the wind
+                comes from.
+
+        :param kwargs:
+        :return: Estimated wind direction (degrees). By default in degrees anticlockwise from East.
+        """
+
+        maximum_tail_frequency = kwargs.get("maximum_tail_frequency", 0.5)
+        spec1d = self.as_frequency_spectrum()
+        spec1d = spec1d.bandpass(fmax=maximum_tail_frequency + 1e-6)
+        power = kwargs.get("power", 4)
+
+        direction = estimate_wind_direction_from_wave_spectrum(
+            spec1d.frequency,
+            spec1d.variance_density,
+            spec1d.a1,
+            spec1d.b1,
+            power=power,
+            **kwargs,
+        )
+        direction = convert_angle_convention(
+            direction, directional_convention, "mathematical", directional_unit
+        )
+        direction = direction.drop_vars(names=NAME_F, errors="ignore")
+
+        direction = set_conventions(direction, "wind_direction", overwrite=True)
+        return direction
 
     # ===================================================================================================================
     # IO
