@@ -104,9 +104,10 @@ spectrum = read_spectral_csv('path/to/spectral/data')
 ```
 """
 
+
 from ._spotter_sdcard_data import read_spectral_csv as _read_spectral_csv
 from ._spotter_wavefleet_api import SofarFleet as _SofarFleet
+from ._spotter_post_processing import post_process_api_spectrum
 
 SofarFleet = _SofarFleet
-
 read_spectral_csv = _read_spectral_csv

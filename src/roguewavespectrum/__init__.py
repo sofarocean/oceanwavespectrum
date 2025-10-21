@@ -39,11 +39,17 @@ possible to install and use.
 Ideally I would love to make this a community effort, and I would love to see others contribute to this package and
 become maintainers.
 
+Pieter B. Smit, 2025
+
 How well is this package tested?
 --------------------------------
 The package contains a number of unit tests, but those mostly test if the code runs, and if the code is consistent
 with previous behaviour, not if the code is correct. Most of these routines have been in use in
 my own work and calculations are based on well established theory.
+
+Installation
+--------------------------------
+The easiest way to install the package is from pypi through pip: `pip install roguewavespectrum`.
 
 Spectra
 =======
