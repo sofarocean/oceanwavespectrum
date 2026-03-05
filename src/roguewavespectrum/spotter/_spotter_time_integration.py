@@ -14,8 +14,13 @@ from numpy import (
     array,
     zeros,
     linspace,
-    trapz,
 )
+
+try:
+    from numpy import trapezoid
+except ImportError:
+    from numpy import trapz as trapezoid
+
 from numpy.typing import NDArray
 
 DEFAULT_ORDER = 4
@@ -326,6 +331,6 @@ def integrated_response_factor_spectral_tail(
         else:
             spectrum[index] = integration_frequencies[index] ** tail_power
 
-    return trapz(spectrum, integration_frequencies) / trapz(
+    return trapezoid(spectrum, integration_frequencies) / trapezoid(
         abs(complex_amplification_factor) ** 2 * spectrum, integration_frequencies
     )

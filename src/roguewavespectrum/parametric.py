@@ -101,6 +101,11 @@ from ._variable_names import (
 from typing import Literal
 from ._spectrum import Spectrum
 
+try:
+    from numpy import trapezoid
+except ImportError:
+    from numpy import trapz as trapezoid
+
 
 def parametric_directional_spectrum(
     frequency_hertz: numpy.ndarray,
@@ -415,7 +420,7 @@ class FreqShape(ABC):
         """
         values = self._values(frequency_hertz)
         if renormalize:
-            values = values * self.m0 / numpy.trapz(values, frequency_hertz)
+            values = values * self.m0 / trapezoid(values, frequency_hertz)
 
         return values
 
