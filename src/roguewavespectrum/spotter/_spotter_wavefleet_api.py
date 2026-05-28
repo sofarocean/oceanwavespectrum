@@ -253,7 +253,13 @@ class SofarSpotter:
     def get_spectrum(
         self, start_date: DATE_TYPE, end_date: DATE_TYPE, **kwargs
     ) -> Spectrum:
-        raw_spectra = self._query_spectrum(start_date, end_date, **kwargs)
+        try:
+            raw_spectra = self._query_spectrum(start_date, end_date, **kwargs)
+        except QueryError as e:
+            if "Data access is limited to the past 30 days" in str(e):
+                raise ExceptionNoDataForVariable()
+            else:
+                raise
 
         post_process = kwargs.get("post_process", True)
         if len(raw_spectra) == 0:
