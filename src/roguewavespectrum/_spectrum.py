@@ -709,7 +709,7 @@ class Spectrum:
         """
         Convert a spectrum measured in the encounter (Doppler-shifted) frequency frame -- as observed by a buoy
         drifting at `relative_current_speed`/`relative_current_direction_degrees` relative to the water -- into the
-        intrinsic frequency frame used by e.g. a wave model such as WW3. Thin wrapper around
+        intrinsic frequency frame. Thin wrapper around
         `linearwavetheory.encounter_spectra.encounter_spectrum_to_intrinsic_2d`; see that function for the
         underlying physics, the root-selection caveats, and the Jacobian used.
 
@@ -728,10 +728,6 @@ class Spectrum:
         `relative_current_speed`/`relative_current_direction_degrees` describe one drift vector per spectrum (e.g.
         wind-drift + Stokes drift at the buoy): pass a scalar for a single spectrum, or an array broadcastable to
         `space_time_shape` to vary it per spectrum (e.g. per time step).
-
-        NOTE: surface tension is not supported on this path -- `physics_options.kinematic_surface_tension` is
-        ignored (treated as 0) regardless of what this spectrum's physics options specify, matching the
-        limitation of the underlying `linearwavetheory.encounter_spectra` functions.
 
         :param relative_current_speed: Magnitude of the relative current velocity (m/s), i.e. water velocity minus
             buoy velocity. Scalar, or array broadcastable to `space_time_shape`.
