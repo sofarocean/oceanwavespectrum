@@ -37,6 +37,25 @@ def helper_create_spectrum() -> Spectrum:
     )
 
 
+def helper_spectrum_with_depth(depth) -> Spectrum:
+    """Like helper_create_spectrum(), but with a caller-chosen (scalar) depth."""
+    angles = helper_angles()
+    frequency = helper_frequency()
+    frequency_shape = FreqPiersonMoskowitz(0.1, 2)
+    direction_shape = DirCosineN(20, 10)
+
+    return parametric_directional_spectrum(
+        frequency_hertz=frequency,
+        direction_degrees=angles,
+        frequency_shape=frequency_shape,
+        direction_shape=direction_shape,
+        longitude=10,
+        latitude=11,
+        time=datetime(2022, 10, 1, 6, 0, 0, tzinfo=timezone.utc),
+        depth=depth,
+    )
+
+
 def helper_depth(N, d=inf):
     return ones(N) * d
 
@@ -786,3 +805,96 @@ def test_ursell():
         spec.depth = 5
         ursell = spec.ursell_number()
         assert_allclose(ursell, _canary_values, atol=1e-4, rtol=1e-4)
+
+
+def test_stokes_drift_z0_deep_water_matches_reference():
+    # Kenyon (1969): surface (z=0), deep-water Stokes drift reduces to
+    # 2*sigma*k*E(f) = (2/g) * (2*pi*f)^3 * E(f), directionally weighted by a1/b1.
+    spec = helper_create_spectrum()  # depth = inf
+
+    f = spec.frequency.values
+    e = spec.variance_density.values
+    # a1/b1 are NaN (0/0) at frequencies where variance_density is exactly zero; _integrate()
+    # treats those as a zero contribution (see _spectrum.py), so the reference must match.
+    a1 = np.nan_to_num(spec.a1.values)
+    b1 = np.nan_to_num(spec.b1.values)
+
+    weight = (2 * pi * f) ** 3 * e
+    ux_ref = (2.0 / GRAV) * np.trapezoid(weight * a1, f)
+    uy_ref = (2.0 / GRAV) * np.trapezoid(weight * b1, f)
+
+    result = spec.stokes_drift(z=0.0)
+    assert_allclose(result["stokes_drift_x"].values, ux_ref, atol=1e-6, rtol=1e-4)
+    assert_allclose(result["stokes_drift_y"].values, uy_ref, atol=1e-6, rtol=1e-4)
+    # CF standard_name only applies at the surface (z=0).
+    assert (
+        result["stokes_drift_x"].attrs["standard_name"]
+        == "sea_surface_wave_stokes_drift_x_velocity"
+    )
+    assert (
+        result["stokes_drift_y"].attrs["standard_name"]
+        == "sea_surface_wave_stokes_drift_y_velocity"
+    )
+
+
+def test_stokes_drift_2d_matches_1d_with_moments():
+    spec2d, spec1d = helper_create_spectra(4)
+    result2d = spec2d.stokes_drift(z=0.0)
+    result1d = spec1d.stokes_drift(z=0.0)
+    assert_allclose(
+        result2d["stokes_drift_x"].values,
+        result1d["stokes_drift_x"].values,
+        atol=1e-6,
+        rtol=1e-4,
+    )
+    assert_allclose(
+        result2d["stokes_drift_y"].values,
+        result1d["stokes_drift_y"].values,
+        atol=1e-6,
+        rtol=1e-4,
+    )
+
+
+def test_stokes_drift_finite_depth_profile_matches_reference():
+    # General (finite-depth) kernel, evaluated at a depth profile, against an
+    # independently computed reference (cosh(2k(z+h))/sinh(kh)^2).
+    depth = 20.0
+    z = array([0.0, -5.0, -10.0])
+    spec = helper_spectrum_with_depth(depth)
+
+    f = spec.frequency.values
+    e = spec.variance_density.values
+    a1 = np.nan_to_num(spec.a1.values)
+    b1 = np.nan_to_num(spec.b1.values)
+    sigma = 2 * pi * f
+    k = spec.wavenumber.values
+    kh = k * depth
+
+    ux_ref = np.zeros(len(z))
+    uy_ref = np.zeros(len(z))
+    for i, zz in enumerate(z):
+        kernel = np.cosh(2 * k * (zz + depth)) / np.sinh(kh) ** 2
+        weight = sigma * k * e * kernel
+        ux_ref[i] = np.trapezoid(weight * a1, f)
+        uy_ref[i] = np.trapezoid(weight * b1, f)
+
+    result = spec.stokes_drift(z=z)
+    assert list(result["stokes_drift_x"].dims) == ["z"]
+    assert_allclose(result["stokes_drift_x"].values, ux_ref, atol=1e-6, rtol=1e-4)
+    assert_allclose(result["stokes_drift_y"].values, uy_ref, atol=1e-6, rtol=1e-4)
+    # Profile includes below-surface depths, so the surface-only CF standard_name must not
+    # be attached (even though z[0] == 0.0 - it's a per-variable, not per-element, attribute).
+    assert "standard_name" not in result["stokes_drift_x"].attrs
+    assert "standard_name" not in result["stokes_drift_y"].attrs
+
+
+def test_stokes_drift_converges_to_deep_water_as_depth_increases():
+    deep = helper_spectrum_with_depth(inf).stokes_drift(z=0.0)
+    finite = helper_spectrum_with_depth(1.0e5).stokes_drift(z=0.0)
+
+    assert_allclose(
+        finite["stokes_drift_x"].values, deep["stokes_drift_x"].values, rtol=1e-4
+    )
+    assert_allclose(
+        finite["stokes_drift_y"].values, deep["stokes_drift_y"].values, rtol=1e-4
+    )

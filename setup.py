@@ -6,7 +6,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="roguewavespectrum",
-    version="2026.07.13.2",
+    version="2026.07.13.3",
     license="Apache 2 License",
     install_requires=[
         "numpy",
