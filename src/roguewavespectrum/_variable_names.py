@@ -520,6 +520,18 @@ cf_conventions = {
         "valid_min": 0,
         "comment": "Relative Depth",
     },
+    "relative_drift_velocity_x": {
+        # Not an official cf-standard name (windage + Stokes drift has no CF standard name).
+        "units": "m/s",
+        "long_name": "Eastward drift velocity relative to the ambient current",
+        "missing_value": np.nan,
+    },
+    "relative_drift_velocity_y": {
+        # Not an official cf-standard name (windage + Stokes drift has no CF standard name).
+        "units": "m/s",
+        "long_name": "Northward drift velocity relative to the ambient current",
+        "missing_value": np.nan,
+    },
 }
 
 

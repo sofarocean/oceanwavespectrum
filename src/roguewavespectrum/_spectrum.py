@@ -1703,6 +1703,166 @@ class Spectrum:
 
         return Dataset({"stokes_drift_x": ux, "stokes_drift_y": uy})
 
+    def relative_drift_velocity(
+        self,
+        wind_speed: Union[Number, np.ndarray],
+        wind_direction_degrees: Union[Number, np.ndarray],
+        windage_coefficient: float = 0.01,
+        windage_deflection_degrees: Union[Number, np.ndarray] = 0.0,
+        z: Union[Number, np.ndarray] = 0.0,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+    ) -> Dataset:
+        """
+        Vector velocity of a drifting buoy relative to the ambient current -- i.e. everything besides
+        the current itself that moves the buoy -- combining windage (wind-driven slip through the
+        water) and wave-induced Stokes drift via vector addition:
+
+        .. math:: U_r = U_{windage} + U_{stokes}(z)
+
+        Windage is modeled as a fixed fraction of the wind vector (the "1% rule of thumb"),
+        `U_{windage} = c_{windage} \\, U_{wind}`, optionally deflected from the wind direction by
+        `windage_deflection_degrees` (a leeway-style turning angle, e.g. Allen & Plourde 1999); windage
+        itself is depth-independent (it only acts at the surface). Stokes drift is evaluated at depth
+        `z` via `stokes_drift` (default the surface, z=0, the natural choice for buoy drift), and raises
+        if the spectrum has no directional information to compute a Stokes drift from -- see
+        `stokes_drift`.
+
+        `wind_speed`/`wind_direction_degrees` use the same convention as the `relative_current_speed`/
+        `relative_current_direction_degrees` inputs to `to_intrinsic_frame`: direction in degrees,
+        mathematical convention (0 degrees is East, counter-clockwise, direction the wind is blowing
+        *to*). The result is returned as vector components, in the same eastward/northward convention as
+        `stokes_drift`'s output -- convert to speed/direction (e.g. with `np.hypot`/`np.degrees(np.arctan2(...))`)
+        before passing it on as the `relative_current_speed`/`relative_current_direction_degrees` input to
+        `to_intrinsic_frame`.
+
+        :param wind_speed: Wind speed (m/s). Scalar, or array broadcastable to `space_time_shape`.
+        :param wind_direction_degrees: Wind direction (degrees, mathematical convention, direction the
+            wind is blowing to). Scalar, or array broadcastable to `space_time_shape`.
+        :param windage_coefficient: Fraction of wind speed transferred to the buoy as windage (default
+            0.01, the standard 1% rule of thumb).
+        :param windage_deflection_degrees: Deflection of the windage vector away from the wind direction
+            (degrees, positive counter-clockwise) -- a leeway-style turning angle. Default 0 (windage
+            directly downwind). Scalar, or array broadcastable to `space_time_shape`.
+        :param z: Depth(s) (m) at which to evaluate the Stokes-drift contribution, negative down from
+            the surface (z=0); see `stokes_drift`.
+        :param fmin: minimum frequency (Hz), inclusive, used for the Stokes-drift contribution.
+        :param fmax: maximum frequency (Hz), inclusive, used for the Stokes-drift contribution.
+        :return: Dataset with `relative_drift_velocity_x`/`relative_drift_velocity_y` (m/s), the
+            eastward/northward drift velocity relative to the ambient current.
+        """
+        wind_speed = np.broadcast_to(
+            np.asarray(wind_speed, dtype=float), self.space_time_shape
+        )
+        wind_direction_degrees = np.broadcast_to(
+            np.asarray(wind_direction_degrees, dtype=float), self.space_time_shape
+        )
+        windage_deflection_degrees = np.broadcast_to(
+            np.asarray(windage_deflection_degrees, dtype=float), self.space_time_shape
+        )
+        windage_direction_radians = np.radians(
+            wind_direction_degrees + windage_deflection_degrees
+        )
+        windage_x = DataArray(
+            windage_coefficient * wind_speed * np.cos(windage_direction_radians),
+            dims=self.dims_space_time,
+            coords=self.coords_space_time,
+        )
+        windage_y = DataArray(
+            windage_coefficient * wind_speed * np.sin(windage_direction_radians),
+            dims=self.dims_space_time,
+            coords=self.coords_space_time,
+        )
+
+        stokes = self.stokes_drift(z=z, fmin=fmin, fmax=fmax)
+        ux = set_conventions(
+            windage_x + stokes["stokes_drift_x"],
+            "relative_drift_velocity_x",
+            overwrite=True,
+        )
+        uy = set_conventions(
+            windage_y + stokes["stokes_drift_y"],
+            "relative_drift_velocity_y",
+            overwrite=True,
+        )
+        return Dataset(
+            {"relative_drift_velocity_x": ux, "relative_drift_velocity_y": uy}
+        )
+
+    def correct_to_intrinsic_frame(
+        self: "Spectrum",
+        windage_coefficient: float = 0.01,
+        windage_deflection_degrees: Union[Number, np.ndarray] = 0.0,
+        z: Union[Number, np.ndarray] = 0.0,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+        root: str = "principal",
+        number_of_directions: int = 36,
+        method: Estimators = "mem2",
+        solution_method="scipy",
+    ) -> "Spectrum":
+        """
+        Convenience wrapper for the common case of `to_intrinsic_frame`: estimate the wind from the
+        spectrum's own high-frequency tail (`estimate_wind_speed_at_10_meter`/`estimate_wind_direction`),
+        use it to estimate the relative drift velocity (`relative_drift_velocity`), and apply the
+        encounter-to-intrinsic correction with that estimate.
+
+        Note `relative_drift_velocity` and `to_intrinsic_frame` use opposite sign conventions for the
+        relative velocity (buoy-relative-to-current vs. current-relative-to-buoy) -- this method flips
+        the direction by 180 degrees internally to reconcile them; see the source for details.
+
+        :param windage_coefficient: see `relative_drift_velocity`.
+        :param windage_deflection_degrees: see `relative_drift_velocity`.
+        :param z: see `relative_drift_velocity`.
+        :param fmin: see `relative_drift_velocity`.
+        :param fmax: see `relative_drift_velocity`.
+        :param root: see `to_intrinsic_frame`.
+        :param number_of_directions: see `to_intrinsic_frame`.
+        :param method: see `to_intrinsic_frame`.
+        :param solution_method: see `to_intrinsic_frame`.
+        :return: A new 2D Spectrum in the intrinsic frequency frame (see `to_intrinsic_frame`).
+        """
+        wind_speed = self.estimate_wind_speed_at_10_meter()
+        wind_direction_degrees = self.estimate_wind_direction(
+            directional_unit="degree",
+            directional_convention="mathematical",
+        )
+
+        drift = self.relative_drift_velocity(
+            wind_speed,
+            wind_direction_degrees,
+            windage_coefficient=windage_coefficient,
+            windage_deflection_degrees=windage_deflection_degrees,
+            z=z,
+            fmin=fmin,
+            fmax=fmax,
+        )
+        speed = np.hypot(
+            drift["relative_drift_velocity_x"], drift["relative_drift_velocity_y"]
+        )
+        # relative_drift_velocity reports buoy-relative-to-current (U_buoy - U_current), but
+        # to_intrinsic_frame expects the opposite sign convention (U_current - U_buoy, see its
+        # docstring and linearwavetheory.dispersion.inverse_encounter_dispersion_relation) -- so the
+        # direction (not the magnitude) needs a 180 degree flip.
+        direction_degrees = (
+            np.degrees(
+                np.arctan2(
+                    drift["relative_drift_velocity_y"],
+                    drift["relative_drift_velocity_x"],
+                )
+            )
+            + 180.0
+        ) % 360.0
+
+        return self.to_intrinsic_frame(
+            speed,
+            direction_degrees,
+            root=root,
+            number_of_directions=number_of_directions,
+            method=method,
+            solution_method=solution_method,
+        )
+
     def mean_a1(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
         Return the spectral weighted mean moment a1m defined as
