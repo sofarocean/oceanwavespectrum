@@ -497,6 +497,22 @@ cf_conventions = {
         "valid_min": 0,
         "comment": "Generalized Ursell number",
     },
+    "stokes_drift_x": {
+        # standard_name is only correct at the surface (z=0); Spectrum.stokes_drift strips it
+        # for below-surface depths, since CF has no standard name for Stokes drift at depth.
+        "units": "m/s",
+        "standard_name": "sea_surface_wave_stokes_drift_x_velocity",
+        "long_name": "Eastward Stokes drift",
+        "missing_value": np.nan,
+    },
+    "stokes_drift_y": {
+        # standard_name is only correct at the surface (z=0); Spectrum.stokes_drift strips it
+        # for below-surface depths, since CF has no standard name for Stokes drift at depth.
+        "units": "m/s",
+        "standard_name": "sea_surface_wave_stokes_drift_y_velocity",
+        "long_name": "Northward Stokes drift",
+        "missing_value": np.nan,
+    },
     "relative_depth": {
         # Not an official cf-standard name
         "long_name": "relative_depth",

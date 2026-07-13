@@ -1645,6 +1645,64 @@ class Spectrum:
             self.frequency_moment(2, fmin, fmax), "M2", overwrite=True
         )
 
+    def stokes_drift(
+        self,
+        z: Union[Number, np.ndarray] = 0.0,
+        fmin: float = 0.0,
+        fmax: float = np.inf,
+    ) -> Dataset:
+        """
+        Vector Stokes drift at depth(s) `z`, from linear wave theory (Kenyon 1969; Phillips
+        1977, eq. 3.6.5):
+
+        .. math:: U_s(f,z) = \\sigma(f) k(f) E(f) \\frac{\\cosh(2k(f)(z+h))}{\\sinh^2(k(f)h)}
+
+        with h taken from `self.depth` (deep water, infinite depth, if not set). At the surface
+        in deep water this reduces to :math:`U_s(f,0) = 2 \\sigma(f) k(f) E(f)`.
+
+        Since the depth-attenuation kernel above does not depend on direction, integrating a
+        directional spectrum over direction is equivalent to using its first-order directional
+        moments a1(f)/b1(f) directly - so this works uniformly for 1D (moments-only) and 2D
+        spectra without needing to reconstruct a 2D spectrum first:
+
+        .. math:: U_{sx}(z) = \\int K(f,z) a_1(f) E(f) df, \\;\\; U_{sy}(z) = \\int K(f,z) b_1(f) E(f) df
+
+        :param z: depth(s) (m) at which to evaluate the Stokes drift, negative down from the
+            surface (z=0). A scalar returns a single vector per spectrum; an array returns a
+            depth profile (adds a `z` dimension to the output).
+        :param fmin: minimum frequency, inclusive
+        :param fmax: maximum frequency, inclusive
+        :return: Dataset with `stokes_drift_x`/`stokes_drift_y` (m/s), the eastward/northward
+            Stokes drift components (same directional convention as a1/b1).
+        """
+        is_scalar_z = np.isscalar(z)
+        z_values = np.atleast_1d(np.asarray(z, dtype=float))
+        z_data = DataArray(z_values, dims="z", coords={"z": z_values})
+        z_data.attrs["units"] = "m"
+        z_data.attrs["long_name"] = "Depth relative to the surface (negative down)"
+
+        kernel = _stokes_drift_depth_kernel(self.wavenumber, self.depth, z_data)
+        prefactor = (
+            self.angular_frequency * self.wavenumber * self.variance_density * kernel
+        )
+
+        ux = _integrate(prefactor * self.a1, NAME_F, fmin, fmax)
+        uy = _integrate(prefactor * self.b1, NAME_F, fmin, fmax)
+
+        if is_scalar_z:
+            ux = ux.squeeze("z", drop=True)
+            uy = uy.squeeze("z", drop=True)
+
+        ux = set_conventions(ux, "stokes_drift_x", overwrite=True)
+        uy = set_conventions(uy, "stokes_drift_y", overwrite=True)
+        if np.any(z_values != 0.0):
+            # The CF standard_name (sea_surface_wave_stokes_drift_{x,y}_velocity) only applies
+            # at the surface; CF has no standard name for Stokes drift below the surface.
+            ux.attrs.pop("standard_name", None)
+            uy.attrs.pop("standard_name", None)
+
+        return Dataset({"stokes_drift_x": ux, "stokes_drift_y": uy})
+
     def mean_a1(self, fmin: float = 0.0, fmax: float = np.inf) -> DataArray:
         """
         Return the spectral weighted mean moment a1m defined as
@@ -2398,6 +2456,29 @@ def _integrate(
         .fillna(0)
         .integrate(coord=dim)
     )
+
+
+def _stokes_drift_depth_kernel(
+    wavenumber: DataArray, depth: DataArray, z: DataArray
+) -> DataArray:
+    """
+    Depth-attenuation kernel cosh(2k(z+h)) / sinh(kh)^2 for the linear Stokes drift profile
+    (Kenyon 1969; Phillips 1977, eq. 3.6.5). Evaluated with an explicit deep-water branch to
+    stay numerically safe as kh -> inf (the default, unset depth), where cosh/sinh would
+    otherwise overflow to inf/inf: for kh above `_cutoff` the kernel is indistinguishable
+    (to machine precision) from its deep-water limit 2*exp(2kz).
+    """
+    _cutoff = 30.0
+    kh = wavenumber * depth
+    kz = wavenumber * z
+
+    is_deep = kh > _cutoff
+    kh_safe = kh.where(~is_deep, _cutoff)
+
+    finite_depth = np.cosh(2 * (kh_safe + kz)) / np.sinh(kh_safe) ** 2
+    deep_water = 2 * np.exp(2 * kz)
+
+    return finite_depth.where(~is_deep, deep_water)
 
 
 def _bandpass(
