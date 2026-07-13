@@ -11,6 +11,7 @@ from linearwavetheory import (
     nonlinear_wave_spectra_2d,
     estimate_primary_spectrum_from_nonlinear_spectra,
 )
+from linearwavetheory import encounter_spectrum_to_intrinsic_2d
 from linearwavetheory.settings import stokes_theory_options
 from linearwavetheory.stokes_theory import surface_elevation_skewness
 from roguewavespectrum._geospatial import contains
@@ -54,6 +55,7 @@ from ._variable_names import (
     NAME_DEPTH,
     SPECTRAL_VARS,
     SPECTRAL_DIMS,
+    SPECTRAL_MOMENTS,
     NAME_K,
     NAME_W,
     set_conventions,
@@ -67,7 +69,6 @@ from ._variable_names import (
 )
 
 from ._spline_interpolation import cumulative_frequency_interpolation_1d_variable
-
 
 _T = TypeVar("_T")
 _number_or_dataarray = TypeVar("_number_or_dataarray", DataArray, Number)
@@ -695,6 +696,105 @@ class Spectrum:
             except KeyError:
                 dataset = dataset.assign({var: self.dataset[var]})
         return self.__class__(dataset=dataset)
+
+    def to_intrinsic_frame(
+        self: "Spectrum",
+        relative_current_speed: Union[float, np.ndarray],
+        relative_current_direction_degrees: Union[float, np.ndarray],
+        root: str = "principal",
+        number_of_directions: int = 36,
+        method: Estimators = "mem2",
+        solution_method="scipy",
+    ) -> "Spectrum":
+        """
+        Convert a spectrum measured in the encounter (Doppler-shifted) frequency frame -- as observed by a buoy
+        drifting at `relative_current_speed`/`relative_current_direction_degrees` relative to the water -- into the
+        intrinsic frequency frame used by e.g. a wave model such as WW3. Thin wrapper around
+        `linearwavetheory.encounter_spectra.encounter_spectrum_to_intrinsic_2d`; see that function for the
+        underlying physics, the root-selection caveats, and the Jacobian used.
+
+        Directional information is required, since the correction depends on the angle between each wave
+        component's direction and the current: 2D spectra are corrected directly; 1D spectra are first promoted to
+        2D via `as_frequency_direction_spectrum` (using `number_of_directions`/`method`/`solution_method`) if they
+        carry real directional moments (a1/b1/a2/b2 present in the dataset -- note these are synthesized as a flat/
+        isotropic placeholder by `create_spectrum1d` when not supplied, so their presence does not guarantee they
+        are measured, only that they exist); a 1D spectrum with no moments at all raises a ValueError rather than
+        silently applying a direction-less correction.
+
+        The result stays on the spectrum's own frequency grid (this is `target_frequency` in
+        `encounter_spectrum_to_intrinsic_2d`); frequencies for which the requested root does not exist, or that
+        fall outside the valid range after regridding, are NaN -- use `drop_invalid`/`fillna`/`bandpass` to handle
+        these as appropriate. Depth is taken from `self.depth` (deep water, `np.inf`, if not set on the dataset).
+        `relative_current_speed`/`relative_current_direction_degrees` describe one drift vector per spectrum (e.g.
+        wind-drift + Stokes drift at the buoy): pass a scalar for a single spectrum, or an array broadcastable to
+        `space_time_shape` to vary it per spectrum (e.g. per time step).
+
+        NOTE: surface tension is not supported on this path -- `physics_options.kinematic_surface_tension` is
+        ignored (treated as 0) regardless of what this spectrum's physics options specify, matching the
+        limitation of the underlying `linearwavetheory.encounter_spectra` functions.
+
+        :param relative_current_speed: Magnitude of the relative current velocity (m/s), i.e. water velocity minus
+            buoy velocity. Scalar, or array broadcastable to `space_time_shape`.
+        :param relative_current_direction_degrees: Direction (degrees, mathematical convention) of the relative
+            current velocity. Scalar, or array broadcastable to `space_time_shape`.
+        :param root: Which root of the encounter dispersion relation to use, `"principal"` (default) or
+            `"secondary"`. For `"secondary"`, the intrinsic direction is not corrected for the "swept away" branch --
+            see `encounter_spectrum_to_intrinsic_2d`.
+        :param number_of_directions: Number of directions used when promoting a 1D spectrum to 2D. Ignored if the
+            spectrum is already 2D.
+        :param method: Directional reconstruction method used when promoting a 1D spectrum to 2D (see
+            `as_frequency_direction_spectrum`). Ignored if the spectrum is already 2D.
+        :param solution_method: Solution method used when promoting a 1D spectrum to 2D (see
+            `as_frequency_direction_spectrum`). Ignored if the spectrum is already 2D.
+        :return: A new 2D Spectrum in the intrinsic frequency frame.
+        """
+        if self.is_2d:
+            spec2d = self
+        elif all(name in self.dataset for name in SPECTRAL_MOMENTS):
+            spec2d = self.as_frequency_direction_spectrum(
+                number_of_directions, method=method, solution_method=solution_method
+            )
+        else:
+            raise ValueError(
+                "Cannot convert to the intrinsic frame: the spectrum has no directional information "
+                "(a1/b1/a2/b2 are not present in the dataset) to construct a directional correction from."
+            )
+
+        jacobian_hz_to_angular = 2 * np.pi
+        angular_frequency = spec2d.angular_frequency.values
+        direction_degrees = spec2d.direction().values
+        variance_density = (
+            spec2d.directional_variance_density.values / jacobian_hz_to_angular
+        )
+        physics_options = _as_physicsoptions_lwt(spec2d._physics_options)
+
+        space_time_shape = spec2d.space_time_shape
+        relative_current_speed = np.broadcast_to(
+            np.asarray(relative_current_speed, dtype=float), space_time_shape
+        )
+        relative_current_direction_degrees = np.broadcast_to(
+            np.asarray(relative_current_direction_degrees, dtype=float),
+            space_time_shape,
+        )
+        depth = np.broadcast_to(spec2d.depth.values, space_time_shape)
+
+        output = np.empty_like(variance_density)
+        for index in np.ndindex(space_time_shape):
+            output[index] = encounter_spectrum_to_intrinsic_2d(
+                angular_frequency,
+                direction_degrees,
+                variance_density[index],
+                float(relative_current_speed[index]),
+                float(relative_current_direction_degrees[index]),
+                root=root,
+                depth=float(depth[index]),
+                physics_options=physics_options,
+                target_frequency=angular_frequency,
+            )
+
+        result = spec2d.copy(deep=True)
+        result.dataset[NAME_E].values = output * jacobian_hz_to_angular
+        return result
 
     def where(self: "Spectrum", condition: DataArray) -> "Spectrum":
         """
