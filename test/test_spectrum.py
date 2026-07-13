@@ -3,6 +3,7 @@ import numpy as np
 from roguewavespectrum import (
     Spectrum,
     concatenate_spectra,
+    create_spectrum1d,
 )
 from roguewavespectrum.parametric import (
     parametric_directional_spectrum,
@@ -898,3 +899,102 @@ def test_stokes_drift_converges_to_deep_water_as_depth_increases():
     assert_allclose(
         finite["stokes_drift_y"].values, deep["stokes_drift_y"].values, rtol=1e-4
     )
+
+
+def test_relative_drift_velocity_zero_wind_zero_energy_is_zero():
+    frequency = helper_frequency()
+    spec = create_spectrum1d(
+        frequency,
+        variance_density=np.zeros_like(frequency),
+        a1=np.ones_like(frequency),
+        b1=np.zeros_like(frequency),
+        a2=np.zeros_like(frequency),
+        b2=np.zeros_like(frequency),
+    )
+
+    result = spec.relative_drift_velocity(wind_speed=0.0, wind_direction_degrees=0.0)
+    assert_allclose(result["relative_drift_velocity_x"].values, 0.0, atol=1e-12)
+    assert_allclose(result["relative_drift_velocity_y"].values, 0.0, atol=1e-12)
+
+
+def test_relative_drift_velocity_zero_energy_matches_windage_only():
+    frequency = helper_frequency()
+    spec = create_spectrum1d(
+        frequency,
+        variance_density=np.zeros_like(frequency),
+        a1=np.ones_like(frequency),
+        b1=np.zeros_like(frequency),
+        a2=np.zeros_like(frequency),
+        b2=np.zeros_like(frequency),
+    )
+
+    wind_speed = 5.0
+    wind_direction_degrees = 37.0
+    windage_coefficient = 0.02
+    result = spec.relative_drift_velocity(
+        wind_speed=wind_speed,
+        wind_direction_degrees=wind_direction_degrees,
+        windage_coefficient=windage_coefficient,
+    )
+
+    expected_x = (
+        windage_coefficient * wind_speed * np.cos(np.radians(wind_direction_degrees))
+    )
+    expected_y = (
+        windage_coefficient * wind_speed * np.sin(np.radians(wind_direction_degrees))
+    )
+    assert_allclose(result["relative_drift_velocity_x"].values, expected_x, atol=1e-12)
+    assert_allclose(result["relative_drift_velocity_y"].values, expected_y, atol=1e-12)
+
+
+def test_relative_drift_velocity_combines_wind_and_stokes_drift_as_vectors():
+    # a1=1, b1=0 everywhere -> a purely eastward Stokes drift. A purely northward wind gives a
+    # purely northward windage contribution, so the two are orthogonal.
+    frequency = helper_frequency()
+    variance_density = FreqPiersonMoskowitz(0.1, 2).values(frequency)
+    spec = create_spectrum1d(
+        frequency,
+        variance_density=variance_density,
+        a1=np.ones_like(frequency),
+        b1=np.zeros_like(frequency),
+        a2=np.zeros_like(frequency),
+        b2=np.zeros_like(frequency),
+    )
+
+    wind_speed = 5.0
+    windage_coefficient = 0.01
+    stokes = spec.stokes_drift(z=0.0)
+    stokes_x = float(stokes["stokes_drift_x"].values)
+    stokes_y = float(stokes["stokes_drift_y"].values)
+    windage_y = windage_coefficient * wind_speed
+
+    result = spec.relative_drift_velocity(
+        wind_speed=wind_speed,
+        wind_direction_degrees=90.0,
+        windage_coefficient=windage_coefficient,
+    )
+    result_x = float(result["relative_drift_velocity_x"].values)
+    result_y = float(result["relative_drift_velocity_y"].values)
+
+    assert_allclose(result_x, stokes_x, atol=1e-12)
+    assert_allclose(result_y, stokes_y + windage_y, atol=1e-12)
+
+    # Proper vector addition of orthogonal components: Pythagorean magnitude, strictly less than
+    # the naive scalar sum of the two speeds (unless one of them is zero).
+    magnitude = np.hypot(result_x, result_y)
+    naive_scalar_sum = abs(stokes_x) + windage_y
+    assert magnitude < naive_scalar_sum
+    assert_allclose(magnitude, np.hypot(stokes_x, windage_y), atol=1e-12)
+
+
+def test_relative_drift_velocity_raises_without_directional_info():
+    _, spec1d = helper_create_spectra(4)
+    dataset_without_moments = spec1d.dataset.drop_vars(["a1", "b1", "a2", "b2"])
+    spec_without_moments = Spectrum(dataset_without_moments)
+
+    raised = False
+    try:
+        spec_without_moments.relative_drift_velocity(5.0, 90.0)
+    except KeyError:
+        raised = True
+    assert raised
