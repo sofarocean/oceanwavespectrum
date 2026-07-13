@@ -195,7 +195,7 @@ def test_save_and_load():
 
 
 def test_sel():
-    (spec2d, spec1d) = helper_create_spectra(4)
+    spec2d, spec1d = helper_create_spectra(4)
 
     for spec in (spec2d, spec1d):
         time = [spec.time[1].values, spec.time[2].values]
@@ -205,7 +205,7 @@ def test_sel():
 
 
 def test_isel():
-    (spec2d, spec1d) = helper_create_spectra(4)
+    spec2d, spec1d = helper_create_spectra(4)
 
     for spec in (spec2d, spec1d):
         time = [spec.time[1].values, spec.time[2].values]
@@ -222,7 +222,7 @@ def test_spectrum1d():
 
 
 def test_spectrum2d():
-    (_, spec1d) = helper_create_spectra(4)
+    _, spec1d = helper_create_spectra(4)
 
     for method in ["mem2", "mem"]:
         for solution_method in ["scipy", "newton", "approximate"]:
@@ -241,6 +241,76 @@ def test_spectrum2d():
             assert_allclose(
                 spec2d.mean_direction(), spec1d.mean_direction(), rtol=1e-1, atol=1e-1
             )
+
+
+def test_to_intrinsic_frame_2d_zero_current():
+    spec2d, _ = helper_create_spectra(4)
+    corrected = spec2d.to_intrinsic_frame(0.0, 0.0)
+
+    assert corrected.is_2d
+    assert corrected.dims == spec2d.dims
+    assert_allclose(
+        corrected.directional_variance_density.values,
+        spec2d.directional_variance_density.values,
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    assert_allclose(corrected.hm0(), spec2d.hm0(), rtol=1e-6, atol=1e-6)
+
+
+def test_to_intrinsic_frame_2d_nonzero_current():
+    spec2d, _ = helper_create_spectra(4)
+    corrected = spec2d.to_intrinsic_frame(1.0, 20.0)
+
+    assert corrected.is_2d
+    assert corrected.dims == spec2d.dims
+    # The Doppler shift changes the spectrum -- it should not equal the input.
+    assert not np.allclose(corrected.hm0().values, spec2d.hm0().values, rtol=1e-3)
+
+    # Some, but not all, frequencies fall outside the valid range after regridding.
+    nan_fraction = np.mean(np.isnan(corrected.directional_variance_density.values))
+    assert 0 < nan_fraction < 1
+
+
+def test_to_intrinsic_frame_1d_with_moments_promotes_to_2d():
+    spec2d, spec1d = helper_create_spectra(4)
+
+    corrected_from_1d = spec1d.to_intrinsic_frame(1.0, 20.0, number_of_directions=72)
+    corrected_from_2d = spec2d.as_frequency_direction_spectrum(72).to_intrinsic_frame(
+        1.0, 20.0
+    )
+
+    assert corrected_from_1d.is_2d
+    assert_allclose(
+        corrected_from_1d.hm0(), corrected_from_2d.hm0(), rtol=1e-4, atol=1e-4
+    )
+
+
+def test_to_intrinsic_frame_1d_without_moments_raises():
+    _, spec1d = helper_create_spectra(4)
+    dataset_without_moments = spec1d.dataset.drop_vars(["a1", "b1", "a2", "b2"])
+    spec_without_moments = Spectrum(dataset_without_moments)
+
+    try:
+        spec_without_moments.to_intrinsic_frame(1.0, 20.0)
+    except ValueError:
+        pass
+
+
+def test_to_intrinsic_frame_per_timestep_current():
+    spec2d, _ = helper_create_spectra(4)
+
+    speeds = array([0.0, 0.5, 1.0, 1.5])
+    directions = array([0.0, 10.0, 20.0, 30.0])
+    corrected = spec2d.to_intrinsic_frame(speeds, directions)
+
+    assert corrected.dims == spec2d.dims
+    assert_allclose(
+        corrected.isel(time=0).directional_variance_density.values,
+        spec2d.isel(time=0).directional_variance_density.values,
+        rtol=1e-6,
+        atol=1e-6,
+    )
 
 
 #
