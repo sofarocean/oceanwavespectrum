@@ -4,7 +4,7 @@ from roguewavespectrum.parametric import (
     parametric_directional_spectrum,
 )
 from numpy.testing import assert_allclose
-from numpy import linspace, argmax, sum, trapz
+from numpy import linspace, argmax, sum, trapezoid
 
 
 def test_raised_cosine():
@@ -33,7 +33,7 @@ def test_pierson_moskowitz():
     assert argmax(E) == 9, f"maximum at {frequency[argmax((E))]}, not at 0.1"
 
     # Test that it integrates to 1
-    assert_allclose(trapz(E, frequency), 1, rtol=0.001, atol=0.001)
+    assert_allclose(trapezoid(E, frequency), 1, rtol=0.001, atol=0.001)
 
 
 def test_create_parametric_spectrum():
