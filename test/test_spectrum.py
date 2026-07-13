@@ -998,3 +998,42 @@ def test_relative_drift_velocity_raises_without_directional_info():
     except KeyError:
         raised = True
     assert raised
+
+
+def test_correct_to_intrinsic_frame_matches_manual_composition():
+    spec2d, _ = helper_create_spectra(4)
+
+    corrected = spec2d.correct_to_intrinsic_frame()
+
+    wind_speed = spec2d.estimate_wind_speed_at_10_meter()
+    wind_direction_degrees = spec2d.estimate_wind_direction()
+    drift = spec2d.relative_drift_velocity(wind_speed, wind_direction_degrees)
+    speed = np.hypot(
+        drift["relative_drift_velocity_x"], drift["relative_drift_velocity_y"]
+    )
+    direction_degrees = np.degrees(
+        np.arctan2(
+            drift["relative_drift_velocity_y"], drift["relative_drift_velocity_x"]
+        )
+    )
+    expected = spec2d.to_intrinsic_frame(speed, direction_degrees)
+
+    assert_allclose(
+        corrected.directional_variance_density.values,
+        expected.directional_variance_density.values,
+        rtol=1e-10,
+        atol=1e-10,
+    )
+
+
+def test_correct_to_intrinsic_frame_raises_without_directional_info():
+    _, spec1d = helper_create_spectra(4)
+    dataset_without_moments = spec1d.dataset.drop_vars(["a1", "b1", "a2", "b2"])
+    spec_without_moments = Spectrum(dataset_without_moments)
+
+    raised = False
+    try:
+        spec_without_moments.correct_to_intrinsic_frame()
+    except KeyError:
+        raised = True
+    assert raised
