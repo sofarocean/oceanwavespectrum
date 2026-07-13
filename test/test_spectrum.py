@@ -16,6 +16,7 @@ from numpy import linspace, inf, ndarray, pi, array, ones, nan, sqrt
 from numpy.testing import assert_allclose
 from datetime import datetime, timezone, timedelta
 from typing import List, Tuple
+from unittest.mock import patch
 from xarray import DataArray
 import os
 
@@ -1011,11 +1012,16 @@ def test_correct_to_intrinsic_frame_matches_manual_composition():
     speed = np.hypot(
         drift["relative_drift_velocity_x"], drift["relative_drift_velocity_y"]
     )
-    direction_degrees = np.degrees(
-        np.arctan2(
-            drift["relative_drift_velocity_y"], drift["relative_drift_velocity_x"]
+    # relative_drift_velocity reports buoy-relative-to-current, but to_intrinsic_frame expects the
+    # opposite sign convention (current-relative-to-buoy) -- flip direction by 180 degrees to match.
+    direction_degrees = (
+        np.degrees(
+            np.arctan2(
+                drift["relative_drift_velocity_y"], drift["relative_drift_velocity_x"]
+            )
         )
-    )
+        + 180.0
+    ) % 360.0
     expected = spec2d.to_intrinsic_frame(speed, direction_degrees)
 
     assert_allclose(
@@ -1037,3 +1043,33 @@ def test_correct_to_intrinsic_frame_raises_without_directional_info():
     except KeyError:
         raised = True
     assert raised
+
+
+def test_correct_to_intrinsic_frame_flips_direction_before_calling_to_intrinsic_frame():
+    # Pins the sign-convention contract directly: relative_drift_velocity reports buoy-relative-to-
+    # current, but to_intrinsic_frame expects current-relative-to-buoy, so correct_to_intrinsic_frame
+    # must call it with the *opposite* direction, not the raw drift direction.
+    spec2d, _ = helper_create_spectra(4)
+
+    wind_speed = spec2d.estimate_wind_speed_at_10_meter()
+    wind_direction_degrees = spec2d.estimate_wind_direction()
+    drift = spec2d.relative_drift_velocity(wind_speed, wind_direction_degrees)
+    raw_direction_degrees = np.degrees(
+        np.arctan2(
+            drift["relative_drift_velocity_y"], drift["relative_drift_velocity_x"]
+        )
+    ).values
+    expected_direction_degrees = (raw_direction_degrees + 180.0) % 360.0
+
+    with patch.object(
+        spec2d, "to_intrinsic_frame", return_value=spec2d
+    ) as mocked_to_intrinsic_frame:
+        spec2d.correct_to_intrinsic_frame()
+
+    assert mocked_to_intrinsic_frame.call_count == 1
+    _, called_direction_degrees = mocked_to_intrinsic_frame.call_args.args[:2]
+    called_direction_degrees = np.asarray(called_direction_degrees)
+
+    assert_allclose(called_direction_degrees, expected_direction_degrees, atol=1e-8)
+    # Explicitly the opposite direction from what relative_drift_velocity itself reports -- not the same.
+    assert not np.allclose(called_direction_degrees, raw_direction_degrees, atol=1.0)

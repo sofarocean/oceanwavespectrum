@@ -1805,20 +1805,11 @@ class Spectrum:
         Convenience wrapper for the common case of `to_intrinsic_frame`: estimate the wind from the
         spectrum's own high-frequency tail (`estimate_wind_speed_at_10_meter`/`estimate_wind_direction`),
         use it to estimate the relative drift velocity (`relative_drift_velocity`), and apply the
-        encounter-to-intrinsic correction with that estimate. A thin composition of the two -- no new
-        physics.
+        encounter-to-intrinsic correction with that estimate.
 
-        Deliberately does not fold into `to_intrinsic_frame` itself (e.g. as an auto-estimated fallback
-        for its `relative_current_speed`/`relative_current_direction_degrees` args): keeping "estimate the
-        drift" and "apply a given drift" as separate calls lets a caller substitute a real measured/
-        modeled current for the spectral estimate used here.
-
-        A single correction pass (as done here, not an iterative refinement) is sufficient in practice:
-        checked against ~8,000 real Spotter spectra (4 experiment periods, stratified by Hs), the relative
-        drift velocity recomputed *after* one `to_intrinsic_frame` pass differs from the naive
-        (encounter-frame) estimate by a median of ~1% at low Hs growing gently to ~6% even at 9-14 m Hs,
-        with angular shifts under 0.15 degrees throughout -- no sign of blow-up or divergence that would
-        call for a second pass.
+        Note `relative_drift_velocity` and `to_intrinsic_frame` use opposite sign conventions for the
+        relative velocity (buoy-relative-to-current vs. current-relative-to-buoy) -- this method flips
+        the direction by 180 degrees internally to reconcile them; see the source for details.
 
         :param windage_coefficient: see `relative_drift_velocity`.
         :param windage_deflection_degrees: see `relative_drift_velocity`.
@@ -1832,7 +1823,10 @@ class Spectrum:
         :return: A new 2D Spectrum in the intrinsic frequency frame (see `to_intrinsic_frame`).
         """
         wind_speed = self.estimate_wind_speed_at_10_meter()
-        wind_direction_degrees = self.estimate_wind_direction()
+        wind_direction_degrees = self.estimate_wind_direction(
+            directional_unit="degree",
+            directional_convention="mathematical",
+        )
 
         drift = self.relative_drift_velocity(
             wind_speed,
@@ -1846,11 +1840,19 @@ class Spectrum:
         speed = np.hypot(
             drift["relative_drift_velocity_x"], drift["relative_drift_velocity_y"]
         )
-        direction_degrees = np.degrees(
-            np.arctan2(
-                drift["relative_drift_velocity_y"], drift["relative_drift_velocity_x"]
+        # relative_drift_velocity reports buoy-relative-to-current (U_buoy - U_current), but
+        # to_intrinsic_frame expects the opposite sign convention (U_current - U_buoy, see its
+        # docstring and linearwavetheory.dispersion.inverse_encounter_dispersion_relation) -- so the
+        # direction (not the magnitude) needs a 180 degree flip.
+        direction_degrees = (
+            np.degrees(
+                np.arctan2(
+                    drift["relative_drift_velocity_y"],
+                    drift["relative_drift_velocity_x"],
+                )
             )
-        )
+            + 180.0
+        ) % 360.0
 
         return self.to_intrinsic_frame(
             speed,
