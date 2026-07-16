@@ -74,7 +74,7 @@ def convert_angle_convention(
 
     - mathematical: 0 degree / rad is east, going to, measured positive counterclockwise.
     - oceanographical: 0 degree / rad is north, going to, measured positive clockwise.
-    - meteorological: 0 / rad degree is north, coming from, measured positive counterclockwise.
+    - meteorological: 0 / rad degree is north, coming from, measured positive clockwise.
 
     :param angle: angle in rad or degree
     :param to_convention: convention to convert to, one of 'mathematical', 'oceanographical', 'meteorological'

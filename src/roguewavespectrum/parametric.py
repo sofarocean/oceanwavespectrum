@@ -84,7 +84,7 @@ References
     Journal of Fluid Mechanics, 4(4), 426-434.
 """
 from abc import ABC, abstractmethod
-from scipy.special import gamma
+from scipy.special import gammaln
 import numpy
 from ._time import to_datetime64
 from xarray import Dataset
@@ -230,7 +230,15 @@ class DirShape(ABC):
             bin_size = (forward_diff + backward_diff) / 2
 
             # With the binsize known, renormalize to 1
-            data = data / numpy.sum(data * bin_size)
+            total = numpy.sum(data * bin_size)
+            if total <= 0:
+                raise ValueError(
+                    f"direction shape width_degrees={self.width_degrees} is too narrow to be "
+                    f"resolved on the given direction grid (mean spacing "
+                    f"{numpy.mean(numpy.abs(bin_size)):.2f} degrees); provide a finer grid or a "
+                    f"larger width_degrees."
+                )
+            data = data / total
 
         return data
 
@@ -259,13 +267,21 @@ class DirCosineN(DirShape):
 
         """
         super(DirCosineN, self).__init__(mean_direction_degrees, width_degrees)
+        max_width_degrees = self.power_to_width_degrees(0)
+        if width_degrees > max_width_degrees:
+            raise ValueError(
+                f"DirCosineN is only valid for width_degrees <= {max_width_degrees:.2f} "
+                f"(got {width_degrees}); use DirCosine2N for wider spreads."
+            )
 
     def _normalization(self, power):
+        # Computed via log-gamma (gammaln) rather than gamma directly - gamma(power/2+1) overflows
+        # float64 for narrow widths (width_degrees below ~3 degrees, power above ~340).
         return (
             numpy.pi
             / 180
-            * gamma(power / 2 + 1)
-            / (gamma(power / 2 + 1 / 2) * numpy.sqrt(numpy.pi))
+            * numpy.exp(gammaln(power / 2 + 1) - gammaln(power / 2 + 1 / 2))
+            / numpy.sqrt(numpy.pi)
         )
 
     def _values(self, direction_degrees: numpy.ndarray) -> numpy.ndarray:
@@ -330,14 +346,22 @@ class DirCosine2N(DirShape):
 
         """
         super(DirCosine2N, self).__init__(mean_direction_degrees, width_degrees)
+        max_width_degrees = self.power_to_width_degrees(0)
+        if width_degrees > max_width_degrees:
+            raise ValueError(
+                f"DirCosine2N is only valid for width_degrees <= {max_width_degrees:.2f} "
+                f"(got {width_degrees})."
+            )
 
     def _normalization(self, power):
-        # See Holthuijsen, 2010, section 6.3.3
+        # See Holthuijsen, 2010, section 6.3.3. Computed via log-gamma (gammaln) rather than gamma
+        # directly - gamma(power+1) overflows float64 for narrow widths (width_degrees below ~7
+        # degrees, power above ~170), which is a common real-world swell spread.
         return (
             numpy.pi
             / 180
-            * gamma(power + 1)
-            / (gamma(power + 1 / 2) * 2 * numpy.sqrt(numpy.pi))
+            * numpy.exp(gammaln(power + 1) - gammaln(power + 1 / 2))
+            / (2 * numpy.sqrt(numpy.pi))
         )
 
     def _values(self, direction_degrees: numpy.ndarray) -> numpy.ndarray:
