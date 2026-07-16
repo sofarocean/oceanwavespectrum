@@ -1,10 +1,12 @@
 from roguewavespectrum.parametric import (
     DirCosineN,
     FreqPiersonMoskowitz,
+    FreqJonswap,
     parametric_directional_spectrum,
 )
 from numpy.testing import assert_allclose
-from numpy import linspace, argmax, sum, trapezoid
+from numpy import linspace, argmax, sum, trapezoid, isnan, any as np_any
+import pytest
 
 
 def test_raised_cosine():
@@ -57,7 +59,27 @@ def test_create_parametric_spectrum():
     )
 
 
+def test_freq_shape_zero_waveheight_is_zero_not_nan():
+    """A zero-waveheight frequency shape must renormalize to all-zero, not 0/0 NaN."""
+    shape = FreqJonswap(peak_frequency_hertz=0.1, significant_waveheight_meter=0)
+    frequency = linspace(0.01, 1, 100, endpoint=True)
+    E = shape.values(frequency, renormalize=True)
+    assert not np_any(isnan(E))
+    assert_allclose(E, 0)
+
+
+def test_freq_shape_raises_when_grid_does_not_resolve_peak():
+    """A nonzero-waveheight shape whose peak falls entirely outside the sampled frequency grid
+    must raise, not silently divide by a zero discretized integral (0/0 -> NaN)."""
+    shape = FreqJonswap(peak_frequency_hertz=10.0, significant_waveheight_meter=1.0)
+    frequency = linspace(0.01, 1, 100, endpoint=True)
+    with pytest.raises(ValueError):
+        shape.values(frequency, renormalize=True)
+
+
 if __name__ == "__main__":
     test_raised_cosine()
     test_pierson_moskowitz()
     test_create_parametric_spectrum()
+    test_freq_shape_zero_waveheight_is_zero_not_nan()
+    test_freq_shape_raises_when_grid_does_not_resolve_peak()
