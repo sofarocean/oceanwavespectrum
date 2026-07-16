@@ -1,10 +1,15 @@
 from roguewavespectrum.parametric import (
     DirCosineN,
+    DirCosine2N,
     FreqPiersonMoskowitz,
+    FreqJonswap,
+    FreqPhillips,
+    FreqGaussian,
     parametric_directional_spectrum,
 )
 from numpy.testing import assert_allclose
-from numpy import linspace, argmax, sum, trapezoid
+from numpy import linspace, argmax, sum, trapezoid, isnan, any as np_any
+import pytest
 
 
 def test_raised_cosine():
@@ -57,7 +62,68 @@ def test_create_parametric_spectrum():
     )
 
 
+def test_dir_cosine_n_rejects_wide_spread():
+    """DirCosineN's cos^n approximation diverges past its valid width range - must raise."""
+    # Just inside the valid range should construct fine.
+    DirCosineN(mean_direction_degrees=100, width_degrees=40)
+    with pytest.raises(ValueError):
+        DirCosineN(mean_direction_degrees=100, width_degrees=55)
+
+
+def test_dir_cosine_2n_rejects_wide_spread():
+    """DirCosine2N's formula diverges past its (much wider) valid width range - must raise."""
+    DirCosine2N(mean_direction_degrees=100, width_degrees=80)
+    with pytest.raises(ValueError):
+        DirCosine2N(mean_direction_degrees=100, width_degrees=90)
+
+
+def test_dir_cosine_n_narrow_spread_is_finite():
+    """DirCosineN._normalization must not overflow (gamma ratio) for narrow, realistic spreads."""
+    distribution = DirCosineN(mean_direction_degrees=100, width_degrees=1)
+    angles = linspace(0, 360, 360, endpoint=False)
+    D = distribution.values(angles)
+    assert not np_any(isnan(D))
+    assert_allclose(sum(D), 1, rtol=0.01, atol=0.01)
+
+
+def test_dir_cosine_2n_narrow_spread_is_finite():
+    """DirCosine2N._normalization must not overflow (gamma ratio) for narrow real WW3 swell spreads."""
+    distribution = DirCosine2N(mean_direction_degrees=100, width_degrees=4.8)
+    angles = linspace(0, 360, 360, endpoint=False)
+    D = distribution.values(angles)
+    assert not np_any(isnan(D))
+    assert_allclose(sum(D), 1, rtol=0.01, atol=0.01)
+
+
+def test_dir_shape_renormalize_raises_on_unresolvable_grid():
+    """A narrow shape whose peak decays to (numerically) zero at every coarse grid sample cannot
+    be renormalized - must raise instead of silently dividing by zero."""
+    grid = linspace(0, 360, 36, endpoint=False)  # 10-degree spacing
+    distribution = DirCosine2N(mean_direction_degrees=5, width_degrees=0.1)
+    with pytest.raises(ValueError):
+        distribution.values(grid, renormalize=True)
+
+
+@pytest.mark.parametrize(
+    "freq_shape_cls", [FreqJonswap, FreqPiersonMoskowitz, FreqPhillips, FreqGaussian]
+)
+def test_freq_shape_zero_waveheight_is_zero_not_nan(freq_shape_cls):
+    """A zero-waveheight frequency shape must renormalize to all-zero, not 0/0 NaN."""
+    shape = freq_shape_cls(peak_frequency_hertz=0.1, significant_waveheight_meter=0)
+    frequency = linspace(0.01, 1, 100, endpoint=True)
+    E = shape.values(frequency, renormalize=True)
+    assert not np_any(isnan(E))
+    assert_allclose(E, 0)
+
+
 if __name__ == "__main__":
     test_raised_cosine()
     test_pierson_moskowitz()
     test_create_parametric_spectrum()
+    test_dir_cosine_n_rejects_wide_spread()
+    test_dir_cosine_2n_rejects_wide_spread()
+    test_dir_cosine_n_narrow_spread_is_finite()
+    test_dir_cosine_2n_narrow_spread_is_finite()
+    test_dir_shape_renormalize_raises_on_unresolvable_grid()
+    for cls in [FreqJonswap, FreqPiersonMoskowitz, FreqPhillips, FreqGaussian]:
+        test_freq_shape_zero_waveheight_is_zero_not_nan(cls)

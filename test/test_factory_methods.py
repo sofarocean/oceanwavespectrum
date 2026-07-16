@@ -263,5 +263,58 @@ def test_create_parametric_spectrum2d():
             },
             "errorstring": "Unknown directional shape ERROR.",
         },
+        "test vector input": {
+            "kwargs": {
+                "frequencies": freq,
+                "waveheight": [1, 2],
+                "period": [10, 5],
+                "spread": [20, 25],
+                "direction": [45, 90],
+                "number_of_directions": 36,
+                "frequency_shape_name": "jonswap",
+                "direction_shape_name": "cosN",
+            },
+            "errorstring": None,
+        },
+        "test different vector length error": {
+            "kwargs": {
+                "frequencies": freq,
+                "waveheight": [1, 2],
+                "period": [10, 5],
+                "spread": 20,
+                "direction": [45, 90],
+                "number_of_directions": 36,
+                "frequency_shape_name": "jonswap",
+                "direction_shape_name": "cosN",
+            },
+            "errorstring": "waveheight, period, direction and spread should either all be equal "
+            "length vectors, or scalars",
+        },
     }
     run_input_tests(create_parametric_spectrum2d, testdata)
+
+
+def test_create_parametric_spectrum_zero_waveheight():
+    """A waveheight of 0 should give an all-zero spectrum, not a NaN one (see BUGS_FOUND.md #3)."""
+    freq = np.linspace(0.03, 0.25, 12)
+
+    for shape_name in ["jonswap", "pm", "phillips", "gaussian"]:
+        spectrum1d = create_parametric_spectrum1d(
+            frequencies=freq, waveheight=0.0, period=8.0, shape_name=shape_name
+        )
+        density1d = spectrum1d.dataset["variance_density"].values
+        assert not np.any(np.isnan(density1d)), shape_name
+        assert np.allclose(density1d, 0), shape_name
+
+        spectrum2d = create_parametric_spectrum2d(
+            frequencies=freq,
+            number_of_directions=16,
+            waveheight=0.0,
+            period=8.0,
+            direction=10.0,
+            spread=30.0,
+            frequency_shape_name=shape_name,
+        )
+        density2d = spectrum2d.dataset["directional_variance_density"].values
+        assert not np.any(np.isnan(density2d)), shape_name
+        assert np.allclose(density2d, 0), shape_name

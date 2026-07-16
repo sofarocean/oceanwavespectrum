@@ -411,7 +411,7 @@ def create_parametric_spectrum2d(
     direction = np.atleast_1d(direction)  # type: np.ndarray
     spread = np.atleast_1d(spread)  # type: np.ndarray
 
-    if not (len(waveheight) == len(period)) == len(direction) == len(spread):
+    if len({len(waveheight), len(period), len(direction), len(spread)}) != 1:
         raise ValueError(
             "waveheight, period, direction and spread should either all be equal length vectors, "
             "or scalars"
