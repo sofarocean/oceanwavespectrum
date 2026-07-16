@@ -420,7 +420,20 @@ class FreqShape(ABC):
         """
         values = self._values(frequency_hertz)
         if renormalize:
-            values = values * self.m0 / trapezoid(values, frequency_hertz)
+            if self.m0 == 0:
+                # No energy to renormalize - avoid a 0/0 division and return a clean zero spectrum.
+                values = numpy.zeros_like(values)
+            else:
+                integral = trapezoid(values, frequency_hertz)
+                if integral == 0:
+                    raise ValueError(
+                        f"{type(self).__name__}: the frequency grid does not resolve the shape "
+                        f"(peak_frequency_hertz={self.peak_frequency_hertz}) - the discretized "
+                        f"spectrum integrates to zero even though "
+                        f"significant_waveheight_meter={self.significant_waveheight_meter} != 0. "
+                        f"Provide a frequency grid that covers/resolves the peak."
+                    )
+                values = values * self.m0 / integral
 
         return values
 

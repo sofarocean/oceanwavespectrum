@@ -146,7 +146,9 @@ def test_create_spectrum2d():
 
 
 def test_create_parametric_spectrum1d():
-    # Check if for normal input we get a spectrum
+    # Check if for normal input we get a spectrum. Periods are chosen so the peak frequency
+    # (1/period) actually falls within the frequency grid below - a period of 0.1s here would put
+    # the peak at 10 Hz, entirely outside the grid, silently zeroing out the discretized spectrum.
     freq = np.linspace(0, 1, 100)
 
     # Check for various different input we get expected behaviour, including errors
@@ -155,7 +157,7 @@ def test_create_parametric_spectrum1d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "shape_name": "jonswap",
             },
             "errorstring": None,
@@ -164,7 +166,7 @@ def test_create_parametric_spectrum1d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "shape_name": "pm",
             },
             "errorstring": None,
@@ -173,7 +175,7 @@ def test_create_parametric_spectrum1d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "shape_name": "phillips",
             },
             "errorstring": None,
@@ -182,7 +184,7 @@ def test_create_parametric_spectrum1d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "shape_name": "phillips",
             },
             "errorstring": None,
@@ -191,7 +193,7 @@ def test_create_parametric_spectrum1d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "shape_name": "ERROR",
             },
             "errorstring": "Unknown frequency shape ERROR",
@@ -200,7 +202,7 @@ def test_create_parametric_spectrum1d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": [1, 2],
-                "period": [0.1, 0.2],
+                "period": [10, 5],
                 "shape_name": "jonswap",
             },
             "errorstring": None,
@@ -219,7 +221,9 @@ def test_create_parametric_spectrum1d():
 
 
 def test_create_parametric_spectrum2d():
-    # Check if for normal input we get a spectrum
+    # Check if for normal input we get a spectrum. Period is chosen so the peak frequency
+    # (1/period) actually falls within the frequency grid below - a period of 0.1s here would put
+    # the peak at 10 Hz, entirely outside the grid, silently zeroing out the discretized spectrum.
     freq = np.linspace(0, 1, 100)
 
     # Check for various different input we get expected behaviour, including errors
@@ -228,7 +232,7 @@ def test_create_parametric_spectrum2d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "spread": 20,
                 "direction": 45,
                 "number_of_directions": 36,
@@ -241,7 +245,7 @@ def test_create_parametric_spectrum2d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "spread": 20,
                 "direction": 45,
                 "number_of_directions": 36,
@@ -254,7 +258,7 @@ def test_create_parametric_spectrum2d():
             "kwargs": {
                 "frequencies": freq,
                 "waveheight": 1,
-                "period": 0.1,
+                "period": 10,
                 "spread": 20,
                 "direction": 45,
                 "number_of_directions": 36,
